@@ -644,8 +644,13 @@ app.post('/api/sources', async (c) => {
     return c.json({ error: 'name and source_type are required' }, 400);
   }
 
-  const source = await createSource(body as any, userId, c.env);
-  return c.json(source);
+  try {
+    const source = await createSource(body as any, userId, c.env);
+    return c.json(source);
+  } catch (e) {
+    console.error('[CreateSource] Error:', e);
+    return c.json({ error: e instanceof Error ? e.message : 'Failed to create source' }, 500);
+  }
 });
 
 /**
