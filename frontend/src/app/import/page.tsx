@@ -587,6 +587,9 @@ function SourceCard({
                   {source.file_name}
                 </span>
               )}
+              <span className="text-xs text-gray-400">
+                {format(parseISO(source.created_at), 'MMM d, yyyy h:mm a')}
+              </span>
             </div>
           </div>
         </div>

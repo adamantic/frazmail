@@ -5,7 +5,7 @@ import { Navigation } from '@/components/Navigation';
 import { QMDemon } from '@/components/QMDemon';
 
 export const metadata: Metadata = {
-  title: 'Email Intelligence',
+  title: 'QMDemon',
   description: 'Search and analyze your email archive with AI-powered hybrid search',
 };
 
@@ -15,8 +15,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className="bg-gray-50 min-h-screen">
+    <html lang="en" suppressHydrationWarning>
+      <body className="bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors">
         <Providers>
           <Navigation />
           <main>{children}</main>

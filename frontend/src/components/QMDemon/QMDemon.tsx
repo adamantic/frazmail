@@ -39,10 +39,14 @@ export function QMDemon() {
       }
     };
 
-    // Run every 45 seconds
+    // First run after 10 seconds
+    const initialTimeout = setTimeout(startRunning, 10000);
+
+    // Then run every 45 seconds
     runIntervalRef.current = setInterval(startRunning, 45000);
 
     return () => {
+      clearTimeout(initialTimeout);
       if (runIntervalRef.current) {
         clearInterval(runIntervalRef.current);
       }
