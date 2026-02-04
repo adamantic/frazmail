@@ -803,8 +803,10 @@ app.post('/api/sources/:id/upload-chunk', async (c) => {
 
   const fileValue = formData.get('file') as unknown;
   const file = fileValue instanceof File ? fileValue : null;
-  const chunkIndex = parseInt(formData.get('chunkIndex') as string || '0');
-  const totalChunks = parseInt(formData.get('totalChunks') as string || '1');
+  const chunkIndexRaw = formData.get('chunkIndex');
+  const totalChunksRaw = formData.get('totalChunks');
+  const chunkIndex = Number.parseInt(typeof chunkIndexRaw === 'string' ? chunkIndexRaw : '0', 10);
+  const totalChunks = Number.parseInt(typeof totalChunksRaw === 'string' ? totalChunksRaw : '1', 10);
 
   console.log(`[UploadChunk] Chunk ${chunkIndex + 1}/${totalChunks}, size: ${file?.size || 0}`);
 
@@ -812,10 +814,24 @@ app.post('/api/sources/:id/upload-chunk', async (c) => {
     return c.json({ error: 'No file chunk provided' }, 400);
   }
 
+  if (!Number.isFinite(chunkIndex) || !Number.isFinite(totalChunks) || totalChunks <= 0) {
+    return c.json({ error: 'Invalid chunkIndex/totalChunks' }, 400);
+  }
+
+  if (chunkIndex < 0 || chunkIndex >= totalChunks) {
+    return c.json({ error: 'chunkIndex out of range' }, 400);
+  }
+
+  // KV values are limited to 25MB; keep a safety margin.
+  const MAX_CHUNK_BYTES = 20 * 1024 * 1024;
+  if (file.size > MAX_CHUNK_BYTES) {
+    return c.json({ error: `Chunk too large (max ${MAX_CHUNK_BYTES} bytes)` }, 413);
+  }
+
   const chunkContent = await file.text();
 
   // Store chunk in KV
-  await c.env.CACHE.put(`upload:${sourceId}:chunk:${chunkIndex}`, chunkContent, { expirationTtl: 3600 });
+  await c.env.CACHE.put(`upload:${sourceId}:${chunkIndex}`, chunkContent, { expirationTtl: 3600 });
 
   console.log(`[UploadChunk] Chunk ${chunkIndex + 1} stored`);
 
@@ -851,7 +867,7 @@ app.post('/api/sources/:id/process', async (c) => {
 
   // Process in background
   c.executionCtx.waitUntil(
-    processUploadedChunks(sourceId, userId, totalChunks, c.env)
+    processUploadedFile(sourceId, userId, totalChunks, c.env)
   );
 
   return c.json({
@@ -860,72 +876,6 @@ app.post('/api/sources/:id/process', async (c) => {
     totalChunks,
   });
 });
-
-/**
- * Process uploaded chunks in background
- */
-async function processUploadedChunks(
-  sourceId: string,
-  userId: string,
-  totalChunks: number,
-  env: Env
-): Promise<void> {
-  try {
-    console.log(`[ProcessChunks] Reassembling ${totalChunks} chunks`);
-
-    // Reassemble file from chunks
-    let fileContent = '';
-    for (let i = 0; i < totalChunks; i++) {
-      const chunk = await env.CACHE.get(`upload:${sourceId}:chunk:${i}`);
-      if (chunk) {
-        fileContent += chunk;
-        await env.CACHE.delete(`upload:${sourceId}:chunk:${i}`);
-      }
-    }
-
-    console.log(`[ProcessChunks] File reassembled, size: ${fileContent.length}`);
-
-    // Parse mbox and process emails
-    const emails = parseMboxContent(fileContent);
-    console.log(`[ProcessChunks] Parsed ${emails.length} emails`);
-
-    // Update total count
-    await env.DB.prepare(
-      'UPDATE email_sources SET emails_total = ? WHERE id = ? AND user_id = ?'
-    ).bind(emails.length, sourceId, userId).run();
-
-    // Process in batches
-    const batchSize = 25;
-    let processed = 0;
-    let failed = 0;
-
-    for (let i = 0; i < emails.length; i += batchSize) {
-      const batch = emails.slice(i, i + batchSize);
-
-      const result = await ingestEmailsWithSource(batch, sourceId, userId, env);
-      processed += result.processed;
-      failed += result.failed;
-
-      // Update progress
-      await incrementProcessed(sourceId, result.processed, result.failed, userId, env);
-
-      if (i % 100 === 0) {
-        console.log(`[ProcessChunks] Progress: ${processed}/${emails.length}`);
-      }
-    }
-
-    console.log(`[ProcessChunks] Complete: ${processed} processed, ${failed} failed`);
-
-    // Mark as completed
-    await updateSourceStatus(sourceId, 'completed', userId, env);
-
-  } catch (e) {
-    console.error('[ProcessChunks] Error:', e);
-    await updateSourceStatus(sourceId, 'failed', userId, env, {
-      error_message: e instanceof Error ? e.message : 'Processing failed',
-    });
-  }
-}
 
 /**
  * POST /api/sources/:id/upload
@@ -1019,16 +969,15 @@ async function processUploadedFile(
 ): Promise<void> {
   try {
     // Reassemble file from chunks
-    let fileContent = '';
+    const chunks: string[] = [];
     for (let i = 0; i < totalChunks; i++) {
       const chunk = await env.CACHE.get(`upload:${sourceId}:${i}`);
-      if (chunk) {
-        fileContent += chunk;
-        // Clean up chunk after reading
-        await env.CACHE.delete(`upload:${sourceId}:${i}`);
+      if (chunk === null) {
+        throw new Error(`Missing upload chunk ${i + 1}/${totalChunks}`);
       }
+      chunks.push(chunk);
     }
-    await env.CACHE.delete(`upload:${sourceId}:meta`);
+    const fileContent = chunks.join('');
 
     // Parse mbox and process emails
     const emails = parseMboxContent(fileContent);
@@ -1056,6 +1005,12 @@ async function processUploadedFile(
 
     // Mark as completed
     await updateSourceStatus(sourceId, 'completed', userId, env);
+
+    // Clean up stored chunks/metadata
+    for (let i = 0; i < totalChunks; i++) {
+      await env.CACHE.delete(`upload:${sourceId}:${i}`);
+    }
+    await env.CACHE.delete(`upload:${sourceId}:meta`);
 
   } catch (e) {
     console.error('Background processing failed:', e);

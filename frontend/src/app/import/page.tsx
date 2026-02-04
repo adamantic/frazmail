@@ -154,8 +154,10 @@ export default function ImportPage() {
       const source = await sourceRes.json();
       console.log('[Upload] Source created:', source.id);
 
-      // Upload file in chunks (Cloudflare has 100MB limit)
-      const CHUNK_SIZE = 50 * 1024 * 1024; // 50MB chunks
+      // Upload file in chunks.
+      // - Workers requests have an upper size limit
+      // - KV values max out at 25MB, so keep chunks well under that
+      const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB chunks
       const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
       console.log('[Upload] File size:', file.size, 'Total chunks:', totalChunks);
 
@@ -781,4 +783,3 @@ function UploadModal({
     </div>
   );
 }
-
