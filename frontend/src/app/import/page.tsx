@@ -128,9 +128,11 @@ export default function ImportPage() {
     }
 
     setUploadProgress({ status: 'uploading', fileName: file.name });
+    console.log('[Upload] Starting upload for:', file.name, 'size:', file.size);
 
     try {
       // Create source first
+      console.log('[Upload] Creating source...');
       const sourceRes = await fetch(`${API_URL}/api/sources`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
@@ -141,7 +143,16 @@ export default function ImportPage() {
           file_name: file.name,
         }),
       });
+
+      console.log('[Upload] Source response status:', sourceRes.status);
+      if (!sourceRes.ok) {
+        const errorText = await sourceRes.text();
+        console.error('[Upload] Source creation failed:', errorText);
+        throw new Error('Failed to create source: ' + errorText);
+      }
+
       const source = await sourceRes.json();
+      console.log('[Upload] Source created:', source.id);
 
       // Upload file directly to server for background processing
       const formData = new FormData();
@@ -154,16 +165,28 @@ export default function ImportPage() {
         chunksProcessed: 0,
       });
 
+      console.log('[Upload] Uploading file to server...');
       const uploadRes = await fetch(`${API_URL}/api/sources/${source.id}/upload`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: formData,
       });
 
+      console.log('[Upload] Upload response status:', uploadRes.status);
+
       if (!uploadRes.ok) {
-        const error = await uploadRes.json();
-        throw new Error(error.error || 'Upload failed');
+        const errorText = await uploadRes.text();
+        console.error('[Upload] Upload failed:', errorText);
+        try {
+          const error = JSON.parse(errorText);
+          throw new Error(error.error || 'Upload failed');
+        } catch {
+          throw new Error('Upload failed: ' + errorText);
+        }
       }
+
+      const uploadResult = await uploadRes.json();
+      console.log('[Upload] Upload successful:', uploadResult);
 
       // Upload complete - server is now processing in background
       setUploadProgress({
@@ -175,6 +198,7 @@ export default function ImportPage() {
       fetchSources();
 
     } catch (e) {
+      console.error('[Upload] Error:', e);
       setUploadProgress({
         status: 'error',
         fileName: file.name,
@@ -611,8 +635,11 @@ function UploadModal({
             onDragOver={handleDrag}
             onDrop={handleDrop}
           >
+            <label htmlFor="file-upload" className="sr-only">Choose email file</label>
             <input
               ref={fileInputRef}
+              id="file-upload"
+              name="file-upload"
               type="file"
               accept=".mbox,.pst"
               onChange={handleFileSelect}
@@ -661,10 +688,12 @@ function UploadModal({
           {selectedFile && (
             <div className="mt-4 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="source-name" className="block text-sm font-medium text-gray-700 mb-1">
                   Display Name
                 </label>
                 <input
+                  id="source-name"
+                  name="source-name"
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -673,10 +702,12 @@ function UploadModal({
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="source-email" className="block text-sm font-medium text-gray-700 mb-1">
                   Email Address (optional)
                 </label>
                 <input
+                  id="source-email"
+                  name="source-email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}

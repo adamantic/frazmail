@@ -781,33 +781,52 @@ app.post('/api/sources/:id/complete', async (c) => {
  * Returns immediately, processes in background
  */
 app.post('/api/sources/:id/upload', async (c) => {
+  console.log('[Upload] Received upload request');
   const userId = c.get('userId');
   const sourceId = c.req.param('id');
+  console.log('[Upload] Source ID:', sourceId, 'User ID:', userId);
 
   const source = await getSource(sourceId, userId, c.env);
   if (!source) {
+    console.log('[Upload] Source not found');
     return c.json({ error: 'Source not found' }, 404);
   }
+  console.log('[Upload] Source found:', source.name);
 
   // Get file content
-  const formData = await c.req.formData();
+  console.log('[Upload] Parsing form data...');
+  let formData;
+  try {
+    formData = await c.req.formData();
+    console.log('[Upload] Form data parsed');
+  } catch (e) {
+    console.error('[Upload] Failed to parse form data:', e);
+    return c.json({ error: 'Failed to parse form data: ' + (e instanceof Error ? e.message : 'Unknown error') }, 400);
+  }
+
   const file = formData.get('file') as File;
+  console.log('[Upload] File from form:', file ? `${file.name} (${file.size} bytes)` : 'null');
 
   if (!file) {
+    console.log('[Upload] No file in form data');
     return c.json({ error: 'No file provided' }, 400);
   }
 
+  console.log('[Upload] Reading file content...');
   const fileContent = await file.text();
   const fileSize = fileContent.length;
+  console.log('[Upload] File content read, size:', fileSize);
 
   // Store file in KV for processing (in chunks if large)
   const chunkSize = 1024 * 1024; // 1MB chunks (KV limit is 25MB per value)
   const totalChunks = Math.ceil(fileSize / chunkSize);
+  console.log('[Upload] Storing', totalChunks, 'chunks in KV...');
 
   for (let i = 0; i < totalChunks; i++) {
     const chunk = fileContent.slice(i * chunkSize, (i + 1) * chunkSize);
-    await c.env.CACHE.put(`upload:${sourceId}:${i}`, chunk, { expirationTtl: 3600 }); // 1 hour TTL
+    await c.env.CACHE.put(`upload:${sourceId}:${i}`, chunk, { expirationTtl: 3600 });
   }
+  console.log('[Upload] Chunks stored');
 
   // Store metadata
   await c.env.CACHE.put(`upload:${sourceId}:meta`, JSON.stringify({
@@ -819,12 +838,15 @@ app.post('/api/sources/:id/upload', async (c) => {
 
   // Mark source as processing
   await updateSourceStatus(sourceId, 'processing', userId, c.env, { emails_total: 0 });
+  console.log('[Upload] Source marked as processing');
 
   // Process in background using waitUntil
+  console.log('[Upload] Starting background processing...');
   c.executionCtx.waitUntil(
     processUploadedFile(sourceId, userId, totalChunks, c.env)
   );
 
+  console.log('[Upload] Returning success response');
   return c.json({
     success: true,
     message: 'Upload received, processing in background',
