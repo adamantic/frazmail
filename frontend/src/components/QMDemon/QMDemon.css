@@ -1,4 +1,4 @@
-/* QMDemon - Cute animated demon mascot */
+/* QMDemon - Cute animated demon mascot with modern orange design */
 
 .qm-demon-container {
   position: fixed;
@@ -14,9 +14,23 @@
   position: relative;
   cursor: pointer;
   transition: transform 0.2s ease;
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3));
 }
 
-/* Demon body structure */
+/* Glow effect - orange gradient */
+.demon-glow {
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 20px;
+  background: radial-gradient(ellipse, rgba(249, 115, 22, 0.4) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+/* Demon body structure - warm orange gradient */
 .demon-body {
   position: absolute;
   bottom: 8px;
@@ -24,9 +38,11 @@
   transform: translateX(-50%);
   width: 32px;
   height: 28px;
-  background: #ef4444;
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 50%, #c2410c 100%);
   border-radius: 8px 8px 12px 12px;
-  box-shadow: inset -4px -4px 0 rgba(0, 0, 0, 0.1);
+  box-shadow:
+    inset -4px -4px 0 rgba(0, 0, 0, 0.15),
+    inset 2px 2px 4px rgba(255, 255, 255, 0.2);
 }
 
 .demon-head {
@@ -36,19 +52,22 @@
   transform: translateX(-50%);
   width: 36px;
   height: 28px;
-  background: #ef4444;
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 50%, #c2410c 100%);
   border-radius: 50% 50% 45% 45%;
-  box-shadow: inset -4px -4px 0 rgba(0, 0, 0, 0.1);
+  box-shadow:
+    inset -4px -4px 0 rgba(0, 0, 0, 0.15),
+    inset 2px 2px 4px rgba(255, 255, 255, 0.2);
 }
 
-/* Horns */
+/* Horns - darker orange */
 .demon-horn {
   position: absolute;
   top: -8px;
   width: 8px;
   height: 14px;
-  background: #b91c1c;
+  background: linear-gradient(135deg, #c2410c 0%, #9a3412 100%);
   border-radius: 50% 50% 20% 20%;
+  box-shadow: inset 1px 1px 2px rgba(255, 255, 255, 0.2);
 }
 
 .demon-horn.left {
@@ -61,7 +80,7 @@
   transform: rotate(15deg);
 }
 
-/* Eyes */
+/* Eyes - bright and expressive */
 .demon-eyes {
   position: absolute;
   top: 10px;
@@ -74,17 +93,18 @@
 .demon-eye {
   width: 8px;
   height: 10px;
-  background: white;
+  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
   border-radius: 50%;
   position: relative;
   overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .demon-pupil {
   position: absolute;
   width: 4px;
   height: 5px;
-  background: #1e293b;
+  background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
   border-radius: 50%;
   top: 3px;
   left: 2px;
@@ -99,20 +119,20 @@
   transform: translateX(-50%);
   width: 8px;
   height: 4px;
-  background: #b91c1c;
+  background: #9a3412;
   border-radius: 0 0 50% 50%;
   transition: height 0.2s ease;
 }
 
-/* Blush marks */
+/* Blush marks - warm pink */
 .demon-blush {
   position: absolute;
   bottom: 6px;
   width: 6px;
   height: 3px;
-  background: #fda4af;
+  background: linear-gradient(90deg, #fb7185 0%, #f472b6 100%);
   border-radius: 50%;
-  opacity: 0.8;
+  opacity: 0.7;
 }
 
 .demon-blush.left {
@@ -129,9 +149,10 @@
   bottom: 16px;
   width: 6px;
   height: 14px;
-  background: #ef4444;
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
   border-radius: 4px;
   transform-origin: top center;
+  box-shadow: inset -1px -1px 0 rgba(0, 0, 0, 0.15);
 }
 
 .demon-arm.left {
@@ -150,9 +171,10 @@
   bottom: 0;
   width: 8px;
   height: 12px;
-  background: #ef4444;
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
   border-radius: 4px 4px 6px 6px;
   transform-origin: top center;
+  box-shadow: inset -1px -1px 0 rgba(0, 0, 0, 0.15);
 }
 
 .demon-leg.left {
@@ -170,7 +192,7 @@
   right: -8px;
   width: 16px;
   height: 6px;
-  background: #ef4444;
+  background: linear-gradient(90deg, #f97316 0%, #ea580c 100%);
   border-radius: 0 50% 50% 0;
   transform-origin: left center;
 }
@@ -182,7 +204,7 @@
   top: -2px;
   width: 0;
   height: 0;
-  border-left: 8px solid #b91c1c;
+  border-left: 8px solid #9a3412;
   border-top: 5px solid transparent;
   border-bottom: 5px solid transparent;
 }
@@ -199,6 +221,18 @@
   }
 }
 
+/* Idle glow pulse */
+@keyframes glow-pulse {
+  0%, 100% {
+    opacity: 0.4;
+    transform: translateX(-50%) scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: translateX(-50%) scale(1.1);
+  }
+}
+
 /* Tail wagging */
 @keyframes tail-wag {
   0%, 100% {
@@ -212,8 +246,20 @@
   }
 }
 
+/* Running across screen - right to left */
+@keyframes demon-run-left {
+  0% {
+    right: -60px;
+    left: auto;
+  }
+  100% {
+    right: calc(100vw + 60px);
+    left: auto;
+  }
+}
+
 /* Running across screen - left to right */
-@keyframes demon-run-across {
+@keyframes demon-run-right {
   0% {
     left: -60px;
     right: auto;
@@ -262,22 +308,22 @@
   }
 }
 
-/* Jump/spin on click */
-@keyframes demon-jump {
+/* Flip animation on click */
+@keyframes demon-flip {
   0% {
-    transform: translateY(0) rotate(0deg) scale(1);
+    transform: translateY(0) rotateY(0deg) scale(1);
   }
   25% {
-    transform: translateY(-20px) rotate(180deg) scale(1.1);
+    transform: translateY(-25px) rotateY(180deg) scale(1.15);
   }
   50% {
-    transform: translateY(-25px) rotate(360deg) scale(1.1);
+    transform: translateY(-30px) rotateY(360deg) scale(1.15);
   }
   75% {
-    transform: translateY(-10px) rotate(540deg) scale(1.05);
+    transform: translateY(-15px) rotateY(540deg) scale(1.1);
   }
   100% {
-    transform: translateY(0) rotate(720deg) scale(1);
+    transform: translateY(0) rotateY(720deg) scale(1);
   }
 }
 
@@ -292,41 +338,78 @@
   animation: tail-wag 1s ease-in-out infinite;
 }
 
-/* Running state */
-.qm-demon-container.running {
+.qm-demon.idle .demon-glow {
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+/* Running right state */
+.qm-demon-container.running-right {
   position: fixed;
   bottom: 16px;
   right: auto;
-  animation: demon-run-across 4s linear forwards;
+  animation: demon-run-right 4s linear forwards;
 }
 
-.qm-demon.running {
+.qm-demon.running-right {
   animation: none;
 }
 
-.qm-demon.running .demon-leg.left {
+.qm-demon.running-right .demon-leg.left {
   animation: leg-run-left 0.2s linear infinite;
 }
 
-.qm-demon.running .demon-leg.right {
+.qm-demon.running-right .demon-leg.right {
   animation: leg-run-right 0.2s linear infinite;
 }
 
-.qm-demon.running .demon-arm.left {
+.qm-demon.running-right .demon-arm.left {
   animation: arm-swing-left 0.2s linear infinite;
 }
 
-.qm-demon.running .demon-arm.right {
+.qm-demon.running-right .demon-arm.right {
   animation: arm-swing-right 0.2s linear infinite;
 }
 
-.qm-demon.running .demon-tail {
+.qm-demon.running-right .demon-tail {
   animation: tail-wag 0.3s ease-in-out infinite;
 }
 
-/* Clicked state */
+/* Running left state */
+.qm-demon-container.running-left {
+  position: fixed;
+  bottom: 16px;
+  left: auto;
+  animation: demon-run-left 4s linear forwards;
+}
+
+.qm-demon.running-left {
+  animation: none;
+  transform: scaleX(-1); /* Flip to face left */
+}
+
+.qm-demon.running-left .demon-leg.left {
+  animation: leg-run-left 0.2s linear infinite;
+}
+
+.qm-demon.running-left .demon-leg.right {
+  animation: leg-run-right 0.2s linear infinite;
+}
+
+.qm-demon.running-left .demon-arm.left {
+  animation: arm-swing-left 0.2s linear infinite;
+}
+
+.qm-demon.running-left .demon-arm.right {
+  animation: arm-swing-right 0.2s linear infinite;
+}
+
+.qm-demon.running-left .demon-tail {
+  animation: tail-wag 0.3s ease-in-out infinite;
+}
+
+/* Clicked state - flip */
 .qm-demon.clicked {
-  animation: demon-jump 0.5s ease-out forwards;
+  animation: demon-flip 0.6s ease-out forwards;
 }
 
 /* ============ HOVER STATES ============ */
@@ -339,6 +422,11 @@
 .qm-demon:hover .demon-blush {
   opacity: 1;
   transform: scale(1.2);
+}
+
+.qm-demon:hover .demon-glow {
+  opacity: 0.7;
+  transform: translateX(-50%) scale(1.2);
 }
 
 /* Eye tracking via CSS classes */
@@ -358,22 +446,38 @@
   transform: translateY(2px);
 }
 
+/* ============ DARK MODE ============ */
+
+:root.dark .demon-glow,
+.dark .demon-glow {
+  background: radial-gradient(ellipse, rgba(249, 115, 22, 0.5) 0%, transparent 70%);
+}
+
+:root.dark .qm-demon,
+.dark .qm-demon {
+  filter: drop-shadow(0 4px 8px rgba(249, 115, 22, 0.3)) drop-shadow(0 0 20px rgba(249, 115, 22, 0.2));
+}
+
 /* ============ REDUCED MOTION ============ */
 
 @media (prefers-reduced-motion: reduce) {
   .qm-demon,
   .qm-demon.idle,
-  .qm-demon.running,
+  .qm-demon.running-left,
+  .qm-demon.running-right,
   .qm-demon.clicked,
   .qm-demon .demon-tail,
   .qm-demon .demon-leg,
   .qm-demon .demon-arm,
-  .qm-demon-container.running {
+  .qm-demon .demon-glow,
+  .qm-demon-container.running-left,
+  .qm-demon-container.running-right {
     animation: none !important;
     transition: none !important;
   }
 
-  .qm-demon-container.running {
+  .qm-demon-container.running-left,
+  .qm-demon-container.running-right {
     right: 16px;
     left: auto;
   }

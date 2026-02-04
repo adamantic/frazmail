@@ -772,5 +772,308 @@ app.post('/api/sources/:id/complete', async (c) => {
   return c.json({ success: true });
 });
 
+/**
+ * POST /api/sources/:id/upload
+ * Upload mbox file for server-side processing
+ * Returns immediately, processes in background
+ */
+app.post('/api/sources/:id/upload', async (c) => {
+  const userId = c.get('userId');
+  const sourceId = c.req.param('id');
+
+  const source = await getSource(sourceId, userId, c.env);
+  if (!source) {
+    return c.json({ error: 'Source not found' }, 404);
+  }
+
+  // Get file content
+  const formData = await c.req.formData();
+  const file = formData.get('file') as File;
+
+  if (!file) {
+    return c.json({ error: 'No file provided' }, 400);
+  }
+
+  const fileContent = await file.text();
+  const fileSize = fileContent.length;
+
+  // Store file in KV for processing (in chunks if large)
+  const chunkSize = 1024 * 1024; // 1MB chunks (KV limit is 25MB per value)
+  const totalChunks = Math.ceil(fileSize / chunkSize);
+
+  for (let i = 0; i < totalChunks; i++) {
+    const chunk = fileContent.slice(i * chunkSize, (i + 1) * chunkSize);
+    await c.env.CACHE.put(`upload:${sourceId}:${i}`, chunk, { expirationTtl: 3600 }); // 1 hour TTL
+  }
+
+  // Store metadata
+  await c.env.CACHE.put(`upload:${sourceId}:meta`, JSON.stringify({
+    totalChunks,
+    fileSize,
+    fileName: file.name,
+    uploadedAt: new Date().toISOString(),
+  }), { expirationTtl: 3600 });
+
+  // Mark source as processing
+  await updateSourceStatus(sourceId, 'processing', userId, c.env, { emails_total: 0 });
+
+  // Process in background using waitUntil
+  c.executionCtx.waitUntil(
+    processUploadedFile(sourceId, userId, totalChunks, c.env)
+  );
+
+  return c.json({
+    success: true,
+    message: 'Upload received, processing in background',
+    fileSize,
+    totalChunks,
+  });
+});
+
+/**
+ * Process uploaded mbox file in background
+ */
+async function processUploadedFile(
+  sourceId: string,
+  userId: string,
+  totalChunks: number,
+  env: Env
+): Promise<void> {
+  try {
+    // Reassemble file from chunks
+    let fileContent = '';
+    for (let i = 0; i < totalChunks; i++) {
+      const chunk = await env.CACHE.get(`upload:${sourceId}:${i}`);
+      if (chunk) {
+        fileContent += chunk;
+        // Clean up chunk after reading
+        await env.CACHE.delete(`upload:${sourceId}:${i}`);
+      }
+    }
+    await env.CACHE.delete(`upload:${sourceId}:meta`);
+
+    // Parse mbox and process emails
+    const emails = parseMboxContent(fileContent);
+
+    // Update total count
+    await env.DB.prepare(
+      'UPDATE email_sources SET emails_total = ? WHERE id = ? AND user_id = ?'
+    ).bind(emails.length, sourceId, userId).run();
+
+    // Process in batches
+    const batchSize = 25;
+    let processed = 0;
+    let failed = 0;
+
+    for (let i = 0; i < emails.length; i += batchSize) {
+      const batch = emails.slice(i, i + batchSize);
+
+      const result = await ingestEmailsWithSource(batch, sourceId, userId, env);
+      processed += result.processed;
+      failed += result.failed;
+
+      // Update progress
+      await incrementProcessed(sourceId, result.processed, result.failed, userId, env);
+    }
+
+    // Mark as completed
+    await updateSourceStatus(sourceId, 'completed', userId, env);
+
+  } catch (e) {
+    console.error('Background processing failed:', e);
+    await updateSourceStatus(sourceId, 'failed', userId, env, {
+      error_message: e instanceof Error ? e.message : 'Processing failed',
+    });
+  }
+}
+
+/**
+ * Parse mbox file content into email objects
+ */
+function parseMboxContent(content: string): IngestEmailRequest[] {
+  const emails: IngestEmailRequest[] = [];
+  const lines = content.split(/\r?\n/);
+
+  let currentEmailLines: string[] = [];
+  let inEmail = false;
+
+  for (const line of lines) {
+    // MBOX format: each email starts with "From " followed by email and timestamp
+    if (line.startsWith('From ') && (line.includes('@') || line.includes(' at '))) {
+      if (currentEmailLines.length > 0) {
+        const parsed = parseEmailContent(currentEmailLines.join('\n'));
+        if (parsed) emails.push(parsed);
+      }
+      currentEmailLines = [];
+      inEmail = true;
+    } else if (inEmail) {
+      currentEmailLines.push(line);
+    }
+  }
+
+  // Don't forget the last email
+  if (currentEmailLines.length > 0) {
+    const parsed = parseEmailContent(currentEmailLines.join('\n'));
+    if (parsed) emails.push(parsed);
+  }
+
+  return emails;
+}
+
+/**
+ * Parse a single email's raw content
+ */
+function parseEmailContent(raw: string): IngestEmailRequest | null {
+  try {
+    const headerEndIndex = raw.indexOf('\n\n');
+    if (headerEndIndex === -1) return null;
+
+    const headerSection = raw.substring(0, headerEndIndex);
+    const bodySection = raw.substring(headerEndIndex + 2);
+
+    const headers = parseEmailHeaders(headerSection);
+
+    const fromHeader = headers['from'] || '';
+    const fromMatch = fromHeader.match(/<([^>]+)>/) || fromHeader.match(/([\w.-]+@[\w.-]+)/);
+    const fromEmail = fromMatch ? fromMatch[1].toLowerCase() : fromHeader.toLowerCase();
+    const fromName = fromHeader.replace(/<[^>]+>/, '').trim().replace(/^"|"$/g, '');
+
+    const toHeader = headers['to'] || '';
+    const toRecipients = parseEmailRecipients(toHeader);
+
+    const ccHeader = headers['cc'] || '';
+    const ccRecipients = parseEmailRecipients(ccHeader);
+
+    const messageId = (headers['message-id'] || `generated-${Date.now()}-${Math.random().toString(36).slice(2)}`).replace(/^<|>$/g, '');
+
+    const subject = decodeEmailHeader(headers['subject'] || '(No Subject)');
+
+    const dateHeader = headers['date'] || '';
+    let sentAt = new Date().toISOString();
+    if (dateHeader) {
+      try {
+        const parsed = new Date(dateHeader);
+        if (!isNaN(parsed.getTime())) {
+          sentAt = parsed.toISOString();
+        }
+      } catch {}
+    }
+
+    // Parse body
+    let bodyText = bodySection;
+    const contentType = headers['content-type'] || '';
+
+    if (contentType.includes('multipart')) {
+      const boundaryMatch = contentType.match(/boundary="?([^";\s]+)"?/);
+      if (boundaryMatch) {
+        const boundary = boundaryMatch[1];
+        const parts = bodySection.split('--' + boundary);
+        for (const part of parts) {
+          if (part.includes('Content-Type: text/plain') || part.includes('content-type: text/plain')) {
+            const partHeaderEnd = part.indexOf('\n\n');
+            if (partHeaderEnd !== -1) {
+              bodyText = part.substring(partHeaderEnd + 2).trim();
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // Decode if needed
+    if (headers['content-transfer-encoding']?.toLowerCase() === 'quoted-printable') {
+      bodyText = decodeQuotedPrintableContent(bodyText);
+    } else if (headers['content-transfer-encoding']?.toLowerCase() === 'base64') {
+      try {
+        bodyText = atob(bodyText.replace(/\s/g, ''));
+      } catch {}
+    }
+
+    if (!fromEmail || !fromEmail.includes('@')) return null;
+
+    return {
+      message_id: messageId,
+      subject,
+      body_text: bodyText.slice(0, 50000),
+      sent_at: sentAt,
+      from_email: fromEmail,
+      from_name: fromName || undefined,
+      to: toRecipients,
+      cc: ccRecipients,
+      in_reply_to: headers['in-reply-to']?.replace(/^<|>$/g, ''),
+      references: (headers['references'] || '').split(/\s+/).filter(Boolean).map(r => r.replace(/^<|>$/g, '')),
+    };
+  } catch (e) {
+    console.error('Failed to parse email:', e);
+    return null;
+  }
+}
+
+function parseEmailHeaders(headerSection: string): Record<string, string> {
+  const headers: Record<string, string> = {};
+  const lines = headerSection.split(/\r?\n/);
+  let currentKey = '';
+  let currentValue = '';
+
+  for (const line of lines) {
+    if (line.startsWith(' ') || line.startsWith('\t')) {
+      currentValue += ' ' + line.trim();
+    } else {
+      if (currentKey) {
+        headers[currentKey.toLowerCase()] = currentValue;
+      }
+      const colonIndex = line.indexOf(':');
+      if (colonIndex !== -1) {
+        currentKey = line.substring(0, colonIndex);
+        currentValue = line.substring(colonIndex + 1).trim();
+      }
+    }
+  }
+  if (currentKey) {
+    headers[currentKey.toLowerCase()] = currentValue;
+  }
+
+  return headers;
+}
+
+function parseEmailRecipients(header: string): { email: string; name?: string }[] {
+  if (!header) return [];
+
+  const recipients: { email: string; name?: string }[] = [];
+  const parts = header.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/);
+
+  for (const part of parts) {
+    const trimmed = part.trim();
+    const emailMatch = trimmed.match(/<([^>]+)>/) || trimmed.match(/([\w.-]+@[\w.-]+)/);
+    if (emailMatch) {
+      const email = emailMatch[1].toLowerCase();
+      const name = trimmed.replace(/<[^>]+>/, '').trim().replace(/^"|"$/g, '');
+      recipients.push({ email, name: name || undefined });
+    }
+  }
+
+  return recipients;
+}
+
+function decodeEmailHeader(value: string): string {
+  return value.replace(/=\?([^?]+)\?([BQ])\?([^?]+)\?=/gi, (match, charset, encoding, text) => {
+    try {
+      if (encoding.toUpperCase() === 'B') {
+        return atob(text);
+      } else {
+        return decodeQuotedPrintableContent(text.replace(/_/g, ' '));
+      }
+    } catch {
+      return text;
+    }
+  });
+}
+
+function decodeQuotedPrintableContent(text: string): string {
+  return text
+    .replace(/=\r?\n/g, '')
+    .replace(/=([0-9A-F]{2})/gi, (match, hex) => String.fromCharCode(parseInt(hex, 16)));
+}
+
 // Export for Cloudflare Workers
 export default app;

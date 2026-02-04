@@ -43,20 +43,6 @@ interface EmailSource {
   created_at: string;
 }
 
-interface ParsedEmail {
-  message_id: string;
-  subject: string;
-  body_text: string;
-  body_html?: string;
-  sent_at: string;
-  from_email: string;
-  from_name?: string;
-  to: { email: string; name?: string }[];
-  cc: { email: string; name?: string }[];
-  in_reply_to?: string;
-  references: string[];
-}
-
 export default function ImportPage() {
   const [sources, setSources] = useState<EmailSource[]>([]);
   const [loading, setLoading] = useState(true);
@@ -141,7 +127,7 @@ export default function ImportPage() {
       return;
     }
 
-    setUploadProgress({ status: 'parsing', fileName: file.name, processed: 0 });
+    setUploadProgress({ status: 'uploading', fileName: file.name });
 
     try {
       // Create source first
@@ -157,145 +143,35 @@ export default function ImportPage() {
       });
       const source = await sourceRes.json();
 
-      // Stream parse and upload - process file in chunks to avoid blocking
-      let totalProcessed = 0;
-      let totalFailed = 0;
-      let emailCount = 0;
-
-      // Mark source as processing (we'll update total later)
-      await fetch(`${API_URL}/api/sources/${source.id}/start`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify({ emails_total: 0 }),
-      });
-
-      // Process file in streaming chunks
-      const chunkSize = 1024 * 1024; // 1MB chunks
-      const batchSize = 25;
-      let buffer = '';
-      let batch: ParsedEmail[] = [];
-      let offset = 0;
-      const totalChunks = Math.ceil(file.size / chunkSize);
-      let chunksProcessed = 0;
+      // Upload file directly to server for background processing
+      const formData = new FormData();
+      formData.append('file', file);
 
       setUploadProgress({
         status: 'uploading',
         fileName: file.name,
-        total: 0,
-        processed: 0,
-        chunksTotal: totalChunks,
+        chunksTotal: 1,
         chunksProcessed: 0,
       });
 
-      while (offset < file.size) {
-        // Read a chunk
-        const chunk = await file.slice(offset, offset + chunkSize).text();
-        buffer += chunk;
-        offset += chunkSize;
-        chunksProcessed++;
-
-        // Find complete emails in buffer (split on "From " lines)
-        const lines = buffer.split(/\r?\n/);
-        let lastEmailEnd = 0;
-        let currentEmailStart = -1;
-        let currentEmailLines: string[] = [];
-
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i];
-          if (line.startsWith('From ') && (line.includes('@') || line.includes(' at '))) {
-            // Found email boundary
-            if (currentEmailStart >= 0 && currentEmailLines.length > 0) {
-              // Parse the previous email
-              const parsed = parseEmail(currentEmailLines.join('\n'));
-              if (parsed) {
-                batch.push(parsed);
-                emailCount++;
-              }
-
-              // Upload batch if full
-              if (batch.length >= batchSize) {
-                try {
-                  const res = await fetch(`${API_URL}/api/ingest`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-                    body: JSON.stringify({ emails: batch, source_id: source.id }),
-                  });
-                  const result = await res.json();
-                  totalProcessed += result.processed || batch.length;
-                  totalFailed += result.failed || 0;
-                } catch (e) {
-                  totalFailed += batch.length;
-                }
-                batch = [];
-
-                // Update progress and yield to main thread
-                setUploadProgress(prev => ({
-                  ...prev,
-                  total: emailCount,
-                  processed: totalProcessed,
-                  chunksProcessed,
-                }));
-                await new Promise(r => setTimeout(r, 0));
-              }
-            }
-            currentEmailStart = i;
-            currentEmailLines = [];
-            lastEmailEnd = i;
-          } else if (currentEmailStart >= 0) {
-            currentEmailLines.push(line);
-          }
-        }
-
-        // Keep incomplete email in buffer for next chunk
-        if (currentEmailStart >= 0) {
-          buffer = lines.slice(lastEmailEnd).join('\n');
-        } else {
-          buffer = '';
-        }
-
-        // Yield to main thread periodically
-        await new Promise(r => setTimeout(r, 0));
-      }
-
-      // Process remaining buffer
-      if (buffer.trim()) {
-        const parsed = parseEmail(buffer);
-        if (parsed) {
-          batch.push(parsed);
-          emailCount++;
-        }
-      }
-
-      // Upload remaining batch
-      if (batch.length > 0) {
-        try {
-          const res = await fetch(`${API_URL}/api/ingest`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-            body: JSON.stringify({ emails: batch, source_id: source.id }),
-          });
-          const result = await res.json();
-          totalProcessed += result.processed || batch.length;
-          totalFailed += result.failed || 0;
-        } catch (e) {
-          totalFailed += batch.length;
-        }
-      }
-
-      // Mark source as completed
-      await fetch(`${API_URL}/api/sources/${source.id}/complete`, {
+      const uploadRes = await fetch(`${API_URL}/api/sources/${source.id}/upload`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify({ status: 'completed' }),
+        headers: getAuthHeaders(),
+        body: formData,
       });
 
+      if (!uploadRes.ok) {
+        const error = await uploadRes.json();
+        throw new Error(error.error || 'Upload failed');
+      }
+
+      // Upload complete - server is now processing in background
       setUploadProgress({
         status: 'complete',
         fileName: file.name,
-        total: emailCount,
-        processed: totalProcessed,
       });
 
+      // Refresh sources to show processing status
       fetchSources();
 
     } catch (e) {
@@ -847,191 +723,3 @@ function UploadModal({
   );
 }
 
-// MBOX Parser
-function parseMbox(content: string): ParsedEmail[] {
-  const emails: ParsedEmail[] = [];
-  const lines = content.split(/\r?\n/);
-
-  let currentEmail: string[] = [];
-  let inEmail = false;
-
-  for (const line of lines) {
-    // MBOX format: each email starts with "From " followed by email and timestamp
-    if (line.startsWith('From ') && (line.includes('@') || line.includes(' at '))) {
-      if (currentEmail.length > 0) {
-        const parsed = parseEmail(currentEmail.join('\n'));
-        if (parsed) emails.push(parsed);
-      }
-      currentEmail = [];
-      inEmail = true;
-    } else if (inEmail) {
-      currentEmail.push(line);
-    }
-  }
-
-  // Don't forget the last email
-  if (currentEmail.length > 0) {
-    const parsed = parseEmail(currentEmail.join('\n'));
-    if (parsed) emails.push(parsed);
-  }
-
-  return emails;
-}
-
-function parseEmail(raw: string): ParsedEmail | null {
-  try {
-    const headerEndIndex = raw.indexOf('\n\n');
-    if (headerEndIndex === -1) return null;
-
-    const headerSection = raw.substring(0, headerEndIndex);
-    const bodySection = raw.substring(headerEndIndex + 2);
-
-    const headers = parseHeaders(headerSection);
-
-    const fromHeader = headers['from'] || '';
-    const fromMatch = fromHeader.match(/<([^>]+)>/) || fromHeader.match(/([\w.-]+@[\w.-]+)/);
-    const fromEmail = fromMatch ? fromMatch[1].toLowerCase() : fromHeader.toLowerCase();
-    const fromName = fromHeader.replace(/<[^>]+>/, '').trim().replace(/^"|"$/g, '');
-
-    const toHeader = headers['to'] || '';
-    const toRecipients = parseRecipients(toHeader);
-
-    const ccHeader = headers['cc'] || '';
-    const ccRecipients = parseRecipients(ccHeader);
-
-    const messageId = (headers['message-id'] || `generated-${Date.now()}-${Math.random().toString(36).slice(2)}`).replace(/^<|>$/g, '');
-
-    const subject = decodeHeader(headers['subject'] || '(No Subject)');
-
-    const dateHeader = headers['date'] || '';
-    let sentAt = new Date().toISOString();
-    if (dateHeader) {
-      try {
-        const parsed = new Date(dateHeader);
-        if (!isNaN(parsed.getTime())) {
-          sentAt = parsed.toISOString();
-        }
-      } catch {}
-    }
-
-    // Parse body (simplified - just get text)
-    let bodyText = bodySection;
-    const contentType = headers['content-type'] || '';
-
-    // Handle multipart
-    if (contentType.includes('multipart')) {
-      const boundaryMatch = contentType.match(/boundary="?([^";\s]+)"?/);
-      if (boundaryMatch) {
-        const boundary = boundaryMatch[1];
-        const parts = bodySection.split('--' + boundary);
-        for (const part of parts) {
-          if (part.includes('Content-Type: text/plain') || part.includes('content-type: text/plain')) {
-            const partHeaderEnd = part.indexOf('\n\n');
-            if (partHeaderEnd !== -1) {
-              bodyText = part.substring(partHeaderEnd + 2).trim();
-              break;
-            }
-          }
-        }
-      }
-    }
-
-    // Decode quoted-printable if needed
-    if (headers['content-transfer-encoding']?.toLowerCase() === 'quoted-printable') {
-      bodyText = decodeQuotedPrintable(bodyText);
-    } else if (headers['content-transfer-encoding']?.toLowerCase() === 'base64') {
-      try {
-        bodyText = atob(bodyText.replace(/\s/g, ''));
-      } catch {}
-    }
-
-    if (!fromEmail || !fromEmail.includes('@')) return null;
-
-    return {
-      message_id: messageId,
-      subject,
-      body_text: bodyText.slice(0, 50000), // Limit body size
-      sent_at: sentAt,
-      from_email: fromEmail,
-      from_name: fromName || undefined,
-      to: toRecipients,
-      cc: ccRecipients,
-      in_reply_to: headers['in-reply-to']?.replace(/^<|>$/g, ''),
-      references: (headers['references'] || '').split(/\s+/).filter(Boolean).map(r => r.replace(/^<|>$/g, '')),
-    };
-  } catch (e) {
-    console.error('Failed to parse email:', e);
-    return null;
-  }
-}
-
-function parseHeaders(headerSection: string): Record<string, string> {
-  const headers: Record<string, string> = {};
-  const lines = headerSection.split(/\r?\n/);
-  let currentKey = '';
-  let currentValue = '';
-
-  for (const line of lines) {
-    if (line.startsWith(' ') || line.startsWith('\t')) {
-      // Continuation of previous header
-      currentValue += ' ' + line.trim();
-    } else {
-      // Save previous header
-      if (currentKey) {
-        headers[currentKey.toLowerCase()] = currentValue;
-      }
-      // Start new header
-      const colonIndex = line.indexOf(':');
-      if (colonIndex !== -1) {
-        currentKey = line.substring(0, colonIndex);
-        currentValue = line.substring(colonIndex + 1).trim();
-      }
-    }
-  }
-  // Save last header
-  if (currentKey) {
-    headers[currentKey.toLowerCase()] = currentValue;
-  }
-
-  return headers;
-}
-
-function parseRecipients(header: string): { email: string; name?: string }[] {
-  if (!header) return [];
-
-  const recipients: { email: string; name?: string }[] = [];
-  const parts = header.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/);
-
-  for (const part of parts) {
-    const trimmed = part.trim();
-    const emailMatch = trimmed.match(/<([^>]+)>/) || trimmed.match(/([\w.-]+@[\w.-]+)/);
-    if (emailMatch) {
-      const email = emailMatch[1].toLowerCase();
-      const name = trimmed.replace(/<[^>]+>/, '').trim().replace(/^"|"$/g, '');
-      recipients.push({ email, name: name || undefined });
-    }
-  }
-
-  return recipients;
-}
-
-function decodeHeader(value: string): string {
-  // Decode RFC 2047 encoded headers like =?UTF-8?Q?...?=
-  return value.replace(/=\?([^?]+)\?([BQ])\?([^?]+)\?=/gi, (match, charset, encoding, text) => {
-    try {
-      if (encoding.toUpperCase() === 'B') {
-        return atob(text);
-      } else {
-        return decodeQuotedPrintable(text.replace(/_/g, ' '));
-      }
-    } catch {
-      return text;
-    }
-  });
-}
-
-function decodeQuotedPrintable(text: string): string {
-  return text
-    .replace(/=\r?\n/g, '')
-    .replace(/=([0-9A-F]{2})/gi, (match, hex) => String.fromCharCode(parseInt(hex, 16)));
-}

@@ -3,12 +3,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import './QMDemon.css';
 
-type DemonState = 'idle' | 'running' | 'clicked';
+type DemonState = 'idle' | 'running-left' | 'running-right' | 'clicked';
 
 export function QMDemon() {
   const [state, setState] = useState<DemonState>('idle');
   const [lookDirection, setLookDirection] = useState<string>('');
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  const [runDirection, setRunDirection] = useState<'left' | 'right'>('right');
   const demonRef = useRef<HTMLDivElement>(null);
   const runIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -31,7 +32,11 @@ export function QMDemon() {
 
     const startRunning = () => {
       if (state === 'idle') {
-        setState('running');
+        // Alternate direction each run
+        const direction = runDirection;
+        setState(direction === 'right' ? 'running-right' : 'running-left');
+        setRunDirection(direction === 'right' ? 'left' : 'right');
+
         // Return to idle after animation completes
         setTimeout(() => {
           setState('idle');
@@ -51,17 +56,18 @@ export function QMDemon() {
         clearInterval(runIntervalRef.current);
       }
     };
-  }, [state, prefersReducedMotion]);
+  }, [state, prefersReducedMotion, runDirection]);
 
   // Handle click interaction
   const handleClick = useCallback(() => {
-    if (state === 'clicked' || prefersReducedMotion) return;
+    if (prefersReducedMotion) return;
 
+    // Always do flip animation on click
     setState('clicked');
     setTimeout(() => {
       setState('idle');
-    }, 500);
-  }, [state, prefersReducedMotion]);
+    }, 600);
+  }, [prefersReducedMotion]);
 
   // Handle mouse movement for eye tracking
   const handleMouseMove = useCallback(
@@ -70,7 +76,7 @@ export function QMDemon() {
 
       const rect = demonRef.current.getBoundingClientRect();
       const demonCenterX = rect.left + rect.width / 2;
-      const demonCenterY = rect.top + rect.height / 3; // Eyes are in upper third
+      const demonCenterY = rect.top + rect.height / 3;
 
       const deltaX = e.clientX - demonCenterX;
       const deltaY = e.clientY - demonCenterY;
@@ -92,7 +98,8 @@ export function QMDemon() {
     setLookDirection('');
   }, []);
 
-  const containerClasses = `qm-demon-container ${state === 'running' ? 'running' : ''}`;
+  const isRunning = state === 'running-left' || state === 'running-right';
+  const containerClasses = `qm-demon-container ${state}`;
   const demonClasses = `qm-demon ${state} ${lookDirection}`;
 
   return (
@@ -103,9 +110,12 @@ export function QMDemon() {
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
       role="img"
-      aria-label="QMDemon mascot - a cute blue demon that occasionally runs across the screen"
+      aria-label="QMDemon mascot - a cute demon that occasionally runs across the screen"
     >
       <div className={demonClasses}>
+        {/* Glow effect */}
+        <div className="demon-glow" />
+
         {/* Head with horns */}
         <div className="demon-head">
           <div className="demon-horn left" />
