@@ -24,9 +24,11 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Build
+      - name: Build for Cloudflare Pages
         working-directory: frontend
-        run: npm run build
+        run: npm run build:cf
+        env:
+          NEXT_PUBLIC_API_URL: https://email-intelligence.michaelfrazis.workers.dev
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
