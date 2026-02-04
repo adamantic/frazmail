@@ -1,0 +1,25 @@
+{
+  "name": "email-intelligence",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:migrate": "wrangler d1 execute email-db --local --file=./migrations/001_initial.sql",
+    "db:migrate:prod": "wrangler d1 execute email-db --file=./migrations/001_initial.sql",
+    "ingest:pst": "python scripts/ingest_pst.py",
+    "ingest:mbox": "python scripts/ingest_mbox.py",
+    "frontend:dev": "cd frontend && npm run dev",
+    "frontend:build": "cd frontend && npm run build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "hono": "^4.3.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240208.0",
+    "typescript": "^5.3.3",
+    "wrangler": "^3.28.0"
+  }
+}

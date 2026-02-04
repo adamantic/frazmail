@@ -1,0 +1,45 @@
+name = "email-intelligence"
+main = "src/workers/index.ts"
+compatibility_date = "2024-02-01"
+account_id = "cd450d4f747613ef79fcbc24b3a4cc6f"
+
+[vars]
+ENVIRONMENT = "development"
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "email-db"
+database_id = "2b10acd3-0c52-4abe-93e5-87f581b6d8d6"
+
+# Vectorize Index
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "email-vectors"
+
+# Workers AI
+[ai]
+binding = "AI"
+
+# R2 Bucket for attachments (enable R2 in dashboard first)
+# [[r2_buckets]]
+# binding = "ATTACHMENTS"
+# bucket_name = "email-attachments"
+
+# KV for caching
+[[kv_namespaces]]
+binding = "CACHE"
+id = "b8dfa9e756484a4b8ed0b74eb8b02934"
+
+# KV for sessions (use same KV for simplicity in dev)
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "b8dfa9e756484a4b8ed0b74eb8b02934"
+
+[env.production]
+vars = { ENVIRONMENT = "production" }
+
+# Custom domain route
+routes = [
+  { pattern = "api.qmdemon.com", custom_domain = true }
+]

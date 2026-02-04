@@ -1,0 +1,380 @@
+/* QMDemon - Cute animated demon mascot */
+
+.qm-demon-container {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 9999;
+  pointer-events: auto;
+}
+
+.qm-demon {
+  width: 48px;
+  height: 64px;
+  position: relative;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+/* Demon body structure */
+.demon-body {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 32px;
+  height: 28px;
+  background: #0ea5e9;
+  border-radius: 8px 8px 12px 12px;
+  box-shadow: inset -4px -4px 0 rgba(0, 0, 0, 0.1);
+}
+
+.demon-head {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 36px;
+  height: 28px;
+  background: #0ea5e9;
+  border-radius: 50% 50% 45% 45%;
+  box-shadow: inset -4px -4px 0 rgba(0, 0, 0, 0.1);
+}
+
+/* Horns */
+.demon-horn {
+  position: absolute;
+  top: -8px;
+  width: 8px;
+  height: 14px;
+  background: #0369a1;
+  border-radius: 50% 50% 20% 20%;
+}
+
+.demon-horn.left {
+  left: 2px;
+  transform: rotate(-15deg);
+}
+
+.demon-horn.right {
+  right: 2px;
+  transform: rotate(15deg);
+}
+
+/* Eyes */
+.demon-eyes {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+}
+
+.demon-eye {
+  width: 8px;
+  height: 10px;
+  background: white;
+  border-radius: 50%;
+  position: relative;
+  overflow: hidden;
+}
+
+.demon-pupil {
+  position: absolute;
+  width: 4px;
+  height: 5px;
+  background: #1e293b;
+  border-radius: 50%;
+  top: 3px;
+  left: 2px;
+  transition: transform 0.15s ease;
+}
+
+/* Mouth */
+.demon-mouth {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 8px;
+  height: 4px;
+  background: #0369a1;
+  border-radius: 0 0 50% 50%;
+  transition: height 0.2s ease;
+}
+
+/* Blush marks */
+.demon-blush {
+  position: absolute;
+  bottom: 6px;
+  width: 6px;
+  height: 3px;
+  background: #fda4af;
+  border-radius: 50%;
+  opacity: 0.8;
+}
+
+.demon-blush.left {
+  left: 4px;
+}
+
+.demon-blush.right {
+  right: 4px;
+}
+
+/* Arms */
+.demon-arm {
+  position: absolute;
+  bottom: 16px;
+  width: 6px;
+  height: 14px;
+  background: #0ea5e9;
+  border-radius: 4px;
+  transform-origin: top center;
+}
+
+.demon-arm.left {
+  left: 2px;
+  transform: rotate(20deg);
+}
+
+.demon-arm.right {
+  right: 2px;
+  transform: rotate(-20deg);
+}
+
+/* Legs */
+.demon-leg {
+  position: absolute;
+  bottom: 0;
+  width: 8px;
+  height: 12px;
+  background: #0ea5e9;
+  border-radius: 4px 4px 6px 6px;
+  transform-origin: top center;
+}
+
+.demon-leg.left {
+  left: 12px;
+}
+
+.demon-leg.right {
+  right: 12px;
+}
+
+/* Tail */
+.demon-tail {
+  position: absolute;
+  bottom: 12px;
+  right: -8px;
+  width: 16px;
+  height: 6px;
+  background: #0ea5e9;
+  border-radius: 0 50% 50% 0;
+  transform-origin: left center;
+}
+
+.demon-tail::after {
+  content: '';
+  position: absolute;
+  right: -6px;
+  top: -2px;
+  width: 0;
+  height: 0;
+  border-left: 8px solid #0369a1;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+}
+
+/* ============ ANIMATIONS ============ */
+
+/* Idle bobbing */
+@keyframes demon-bob {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+/* Tail wagging */
+@keyframes tail-wag {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(15deg);
+  }
+  75% {
+    transform: rotate(-10deg);
+  }
+}
+
+/* Running across screen - left to right */
+@keyframes demon-run-across {
+  0% {
+    left: -60px;
+    right: auto;
+  }
+  100% {
+    left: calc(100vw + 60px);
+    right: auto;
+  }
+}
+
+/* Leg running animation */
+@keyframes leg-run-left {
+  0%, 100% {
+    transform: rotate(-30deg);
+  }
+  50% {
+    transform: rotate(30deg);
+  }
+}
+
+@keyframes leg-run-right {
+  0%, 100% {
+    transform: rotate(30deg);
+  }
+  50% {
+    transform: rotate(-30deg);
+  }
+}
+
+/* Arm swinging */
+@keyframes arm-swing-left {
+  0%, 100% {
+    transform: rotate(40deg);
+  }
+  50% {
+    transform: rotate(-10deg);
+  }
+}
+
+@keyframes arm-swing-right {
+  0%, 100% {
+    transform: rotate(-40deg);
+  }
+  50% {
+    transform: rotate(10deg);
+  }
+}
+
+/* Jump/spin on click */
+@keyframes demon-jump {
+  0% {
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+  25% {
+    transform: translateY(-20px) rotate(180deg) scale(1.1);
+  }
+  50% {
+    transform: translateY(-25px) rotate(360deg) scale(1.1);
+  }
+  75% {
+    transform: translateY(-10px) rotate(540deg) scale(1.05);
+  }
+  100% {
+    transform: translateY(0) rotate(720deg) scale(1);
+  }
+}
+
+/* ============ STATES ============ */
+
+/* Idle state */
+.qm-demon.idle {
+  animation: demon-bob 2s ease-in-out infinite;
+}
+
+.qm-demon.idle .demon-tail {
+  animation: tail-wag 1s ease-in-out infinite;
+}
+
+/* Running state */
+.qm-demon-container.running {
+  position: fixed;
+  bottom: 16px;
+  right: auto;
+  animation: demon-run-across 4s linear forwards;
+}
+
+.qm-demon.running {
+  animation: none;
+}
+
+.qm-demon.running .demon-leg.left {
+  animation: leg-run-left 0.2s linear infinite;
+}
+
+.qm-demon.running .demon-leg.right {
+  animation: leg-run-right 0.2s linear infinite;
+}
+
+.qm-demon.running .demon-arm.left {
+  animation: arm-swing-left 0.2s linear infinite;
+}
+
+.qm-demon.running .demon-arm.right {
+  animation: arm-swing-right 0.2s linear infinite;
+}
+
+.qm-demon.running .demon-tail {
+  animation: tail-wag 0.3s ease-in-out infinite;
+}
+
+/* Clicked state */
+.qm-demon.clicked {
+  animation: demon-jump 0.5s ease-out forwards;
+}
+
+/* ============ HOVER STATES ============ */
+
+.qm-demon:hover .demon-mouth {
+  height: 6px;
+  border-radius: 50%;
+}
+
+.qm-demon:hover .demon-blush {
+  opacity: 1;
+  transform: scale(1.2);
+}
+
+/* Eye tracking via CSS classes */
+.qm-demon.look-left .demon-pupil {
+  transform: translateX(-2px);
+}
+
+.qm-demon.look-right .demon-pupil {
+  transform: translateX(2px);
+}
+
+.qm-demon.look-up .demon-pupil {
+  transform: translateY(-2px);
+}
+
+.qm-demon.look-down .demon-pupil {
+  transform: translateY(2px);
+}
+
+/* ============ REDUCED MOTION ============ */
+
+@media (prefers-reduced-motion: reduce) {
+  .qm-demon,
+  .qm-demon.idle,
+  .qm-demon.running,
+  .qm-demon.clicked,
+  .qm-demon .demon-tail,
+  .qm-demon .demon-leg,
+  .qm-demon .demon-arm,
+  .qm-demon-container.running {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .qm-demon-container.running {
+    right: 16px;
+    left: auto;
+  }
+}

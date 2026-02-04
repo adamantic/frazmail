@@ -1,0 +1,11 @@
+# Email Intelligence - Python Dependencies
+# Install with: pip install -r requirements.txt
+
+# PST parsing
+pypff>=20231001
+
+# HTTP client
+requests>=2.31.0
+
+# Progress bars
+tqdm>=4.66.0
