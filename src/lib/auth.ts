@@ -1,4 +1,3 @@
-import { v4 as uuidv4 } from 'uuid';
 import type { Context, Next } from 'hono';
 import type { Env, User } from '../types';
 
@@ -135,7 +134,7 @@ export async function createUser(
   name: string | null,
   env: Env
 ): Promise<User> {
-  const id = uuidv4();
+  const id = crypto.randomUUID();
   const normalizedEmail = email.toLowerCase().trim();
   const passwordHash = await hashPassword(password);
 

@@ -1,4 +1,3 @@
-import { v4 as uuidv4 } from 'uuid';
 import type { Env, IngestEmailRequest, IngestBatchResponse, VectorMetadata } from '../types';
 
 /**
@@ -41,7 +40,7 @@ async function ingestSingleEmail(
   userId: string,
   env: Env
 ): Promise<void> {
-  const emailId = uuidv4();
+  const emailId = crypto.randomUUID();
 
   // 1. Ensure sender contact exists (scoped to user)
   const fromContact = await getOrCreateContact(email.from_email, email.from_name, userId, env);
@@ -70,7 +69,7 @@ async function ingestSingleEmail(
     email.body_html || null,
     email.sent_at,
     fromContact.id,
-    (email.attachments?.length || 0) > 0 ? 1 : 0,
+    0,
     sourceId,
     userId
   ).run();
@@ -90,35 +89,52 @@ async function ingestSingleEmail(
   }
 
   // 6. Handle attachments
+  let storedAttachments = 0;
   if (email.attachments?.length) {
-    for (const attachment of email.attachments) {
-      const attachmentId = uuidv4();
-      const r2Key = `${userId}/${emailId}/${attachmentId}/${attachment.filename}`;
+    if (!env.ATTACHMENTS?.put) {
+      console.warn('ATTACHMENTS binding not configured; skipping attachments for:', emailId);
+    } else {
+      for (const attachment of email.attachments) {
+        try {
+          const attachmentId = crypto.randomUUID();
+          const r2Key = `${userId}/${emailId}/${attachmentId}/${attachment.filename}`;
 
-      // Upload to R2
-      const content = Uint8Array.from(atob(attachment.content_base64), c => c.charCodeAt(0));
-      await env.ATTACHMENTS.put(r2Key, content, {
-        customMetadata: {
-          email_id: emailId,
-          user_id: userId,
-          filename: attachment.filename,
-          content_type: attachment.content_type,
-        },
-      });
+          // Upload to R2
+          const content = Uint8Array.from(atob(attachment.content_base64), c => c.charCodeAt(0));
+          await env.ATTACHMENTS.put(r2Key, content, {
+            customMetadata: {
+              email_id: emailId,
+              user_id: userId,
+              filename: attachment.filename,
+              content_type: attachment.content_type,
+            },
+          });
 
-      // Record in DB
-      await env.DB.prepare(`
-        INSERT INTO attachments (id, email_id, filename, content_type, size, r2_key)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).bind(
-        attachmentId,
-        emailId,
-        attachment.filename,
-        attachment.content_type,
-        attachment.size,
-        r2Key
-      ).run();
+          // Record in DB
+          await env.DB.prepare(`
+            INSERT INTO attachments (id, email_id, filename, content_type, size, r2_key)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).bind(
+            attachmentId,
+            emailId,
+            attachment.filename,
+            attachment.content_type,
+            attachment.size,
+            r2Key
+          ).run();
+
+          storedAttachments++;
+        } catch (e) {
+          console.error('Failed to store attachment for:', emailId, e);
+        }
+      }
     }
+  }
+
+  if (storedAttachments > 0) {
+    await env.DB.prepare(
+      'UPDATE emails SET has_attachments = 1 WHERE id = ? AND user_id = ?'
+    ).bind(emailId, userId).run();
   }
 
   // 7. Create vector embedding
@@ -155,7 +171,7 @@ async function getOrCreateContact(
   }
 
   // Create new contact
-  const contactId = uuidv4();
+  const contactId = crypto.randomUUID();
   const domain = normalizedEmail.split('@')[1];
 
   // Ensure company exists (scoped to user)
@@ -193,7 +209,7 @@ async function getOrCreateCompany(
   if (existing) return existing;
 
   // Create new company
-  const companyId = uuidv4();
+  const companyId = crypto.randomUUID();
 
   // Extract company name from domain (basic heuristic)
   const companyName = normalizedDomain

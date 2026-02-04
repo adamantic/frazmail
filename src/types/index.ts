@@ -3,7 +3,7 @@ export interface Env {
   DB: D1Database;
   VECTORIZE: VectorizeIndex;
   AI: Ai;
-  ATTACHMENTS: R2Bucket;
+  ATTACHMENTS?: R2Bucket;
   CACHE: KVNamespace;
   SESSIONS: KVNamespace;
   ENVIRONMENT: string;

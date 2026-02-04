@@ -58,7 +58,7 @@ AI-powered hybrid search system for email archives with multi-user support. Buil
 cd email-intelligence
 npm install
 cd frontend && npm install && cd ..
-pip install -r scripts/requirements.txt
+python3 -m pip install -r scripts/requirements.txt
 ```
 
 ### 2. Create Cloudflare Resources
@@ -126,10 +126,10 @@ cd frontend && npm run dev
 
 ```bash
 # From Outlook PST
-python scripts/ingest_pst.py /path/to/archive.pst --api-url http://localhost:8787 --token YOUR_TOKEN
+python3 scripts/ingest_pst.py /path/to/archive.pst --api-url http://localhost:8787 --token YOUR_TOKEN
 
 # From Gmail MBOX (via Google Takeout)
-python scripts/ingest_mbox.py /path/to/All\ mail.mbox --api-url http://localhost:8787 --token YOUR_TOKEN
+python3 scripts/ingest_mbox.py /path/to/All\ mail.mbox --api-url http://localhost:8787 --token YOUR_TOKEN
 ```
 
 ## Search Pipeline

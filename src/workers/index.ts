@@ -338,6 +338,10 @@ app.get('/api/emails/:id/attachments/:attachmentId', async (c) => {
     return c.json({ error: 'Attachment not found' }, 404);
   }
 
+  if (!c.env.ATTACHMENTS) {
+    return c.json({ error: 'Attachments storage is not configured' }, 501);
+  }
+
   const object = await c.env.ATTACHMENTS.get(attachment.r2_key);
   if (!object) {
     return c.json({ error: 'Attachment file not found' }, 404);
@@ -776,8 +780,156 @@ app.post('/api/sources/:id/complete', async (c) => {
 });
 
 /**
+ * POST /api/sources/:id/upload-chunk
+ * Upload a chunk of a large file
+ */
+app.post('/api/sources/:id/upload-chunk', async (c) => {
+  console.log('[UploadChunk] Received chunk upload request');
+  const userId = c.get('userId');
+  const sourceId = c.req.param('id');
+
+  const source = await getSource(sourceId, userId, c.env);
+  if (!source) {
+    return c.json({ error: 'Source not found' }, 404);
+  }
+
+  let formData;
+  try {
+    formData = await c.req.formData();
+  } catch (e) {
+    console.error('[UploadChunk] Failed to parse form data:', e);
+    return c.json({ error: 'Failed to parse form data' }, 400);
+  }
+
+  const fileValue = formData.get('file') as unknown;
+  const file = fileValue instanceof File ? fileValue : null;
+  const chunkIndex = parseInt(formData.get('chunkIndex') as string || '0');
+  const totalChunks = parseInt(formData.get('totalChunks') as string || '1');
+
+  console.log(`[UploadChunk] Chunk ${chunkIndex + 1}/${totalChunks}, size: ${file?.size || 0}`);
+
+  if (!file) {
+    return c.json({ error: 'No file chunk provided' }, 400);
+  }
+
+  const chunkContent = await file.text();
+
+  // Store chunk in KV
+  await c.env.CACHE.put(`upload:${sourceId}:chunk:${chunkIndex}`, chunkContent, { expirationTtl: 3600 });
+
+  console.log(`[UploadChunk] Chunk ${chunkIndex + 1} stored`);
+
+  return c.json({
+    success: true,
+    chunkIndex,
+    totalChunks,
+    chunkSize: chunkContent.length,
+  });
+});
+
+/**
+ * POST /api/sources/:id/process
+ * Start processing uploaded chunks
+ */
+app.post('/api/sources/:id/process', async (c) => {
+  console.log('[Process] Starting processing');
+  const userId = c.get('userId');
+  const sourceId = c.req.param('id');
+
+  const source = await getSource(sourceId, userId, c.env);
+  if (!source) {
+    return c.json({ error: 'Source not found' }, 404);
+  }
+
+  const body = await c.req.json<{ totalChunks: number }>();
+  const totalChunks = body.totalChunks || 1;
+
+  console.log(`[Process] Processing ${totalChunks} chunks for source ${sourceId}`);
+
+  // Mark source as processing
+  await updateSourceStatus(sourceId, 'processing', userId, c.env, { emails_total: 0 });
+
+  // Process in background
+  c.executionCtx.waitUntil(
+    processUploadedChunks(sourceId, userId, totalChunks, c.env)
+  );
+
+  return c.json({
+    success: true,
+    message: 'Processing started',
+    totalChunks,
+  });
+});
+
+/**
+ * Process uploaded chunks in background
+ */
+async function processUploadedChunks(
+  sourceId: string,
+  userId: string,
+  totalChunks: number,
+  env: Env
+): Promise<void> {
+  try {
+    console.log(`[ProcessChunks] Reassembling ${totalChunks} chunks`);
+
+    // Reassemble file from chunks
+    let fileContent = '';
+    for (let i = 0; i < totalChunks; i++) {
+      const chunk = await env.CACHE.get(`upload:${sourceId}:chunk:${i}`);
+      if (chunk) {
+        fileContent += chunk;
+        await env.CACHE.delete(`upload:${sourceId}:chunk:${i}`);
+      }
+    }
+
+    console.log(`[ProcessChunks] File reassembled, size: ${fileContent.length}`);
+
+    // Parse mbox and process emails
+    const emails = parseMboxContent(fileContent);
+    console.log(`[ProcessChunks] Parsed ${emails.length} emails`);
+
+    // Update total count
+    await env.DB.prepare(
+      'UPDATE email_sources SET emails_total = ? WHERE id = ? AND user_id = ?'
+    ).bind(emails.length, sourceId, userId).run();
+
+    // Process in batches
+    const batchSize = 25;
+    let processed = 0;
+    let failed = 0;
+
+    for (let i = 0; i < emails.length; i += batchSize) {
+      const batch = emails.slice(i, i + batchSize);
+
+      const result = await ingestEmailsWithSource(batch, sourceId, userId, env);
+      processed += result.processed;
+      failed += result.failed;
+
+      // Update progress
+      await incrementProcessed(sourceId, result.processed, result.failed, userId, env);
+
+      if (i % 100 === 0) {
+        console.log(`[ProcessChunks] Progress: ${processed}/${emails.length}`);
+      }
+    }
+
+    console.log(`[ProcessChunks] Complete: ${processed} processed, ${failed} failed`);
+
+    // Mark as completed
+    await updateSourceStatus(sourceId, 'completed', userId, env);
+
+  } catch (e) {
+    console.error('[ProcessChunks] Error:', e);
+    await updateSourceStatus(sourceId, 'failed', userId, env, {
+      error_message: e instanceof Error ? e.message : 'Processing failed',
+    });
+  }
+}
+
+/**
  * POST /api/sources/:id/upload
- * Upload mbox file for server-side processing
+ * Upload mbox file for server-side processing (for small files)
  * Returns immediately, processes in background
  */
 app.post('/api/sources/:id/upload', async (c) => {
@@ -804,8 +956,9 @@ app.post('/api/sources/:id/upload', async (c) => {
     return c.json({ error: 'Failed to parse form data: ' + (e instanceof Error ? e.message : 'Unknown error') }, 400);
   }
 
-  const file = formData.get('file') as File;
-  console.log('[Upload] File from form:', file ? `${file.name} (${file.size} bytes)` : 'null');
+  const fileValue = formData.get('file') as unknown;
+  const file = fileValue instanceof File ? fileValue : null;
+  console.log('[Upload] File from form:', file ? `${file.name} (${file.size} bytes)` : String(fileValue));
 
   if (!file) {
     console.log('[Upload] No file in form data');

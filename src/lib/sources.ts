@@ -1,4 +1,3 @@
-import { v4 as uuidv4 } from 'uuid';
 import type { Env } from '../types';
 
 export interface EmailSource {
@@ -34,7 +33,7 @@ export async function createSource(
   userId: string,
   env: Env
 ): Promise<EmailSource> {
-  const id = uuidv4();
+  const id = crypto.randomUUID();
 
   await env.DB.prepare(`
     INSERT INTO email_sources (id, name, email_address, source_type, file_name, status, user_id)

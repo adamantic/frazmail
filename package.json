@@ -7,8 +7,8 @@
     "deploy": "wrangler deploy",
     "db:migrate": "wrangler d1 execute email-db --local --file=./migrations/001_initial.sql",
     "db:migrate:prod": "wrangler d1 execute email-db --file=./migrations/001_initial.sql",
-    "ingest:pst": "python scripts/ingest_pst.py",
-    "ingest:mbox": "python scripts/ingest_mbox.py",
+    "ingest:pst": "python3 scripts/ingest_pst.py",
+    "ingest:mbox": "python3 scripts/ingest_mbox.py",
     "frontend:dev": "cd frontend && npm run dev",
     "frontend:build": "cd frontend && npm run build",
     "typecheck": "tsc --noEmit"

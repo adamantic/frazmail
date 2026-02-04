@@ -154,39 +154,67 @@ export default function ImportPage() {
       const source = await sourceRes.json();
       console.log('[Upload] Source created:', source.id);
 
-      // Upload file directly to server for background processing
-      const formData = new FormData();
-      formData.append('file', file);
+      // Upload file in chunks (Cloudflare has 100MB limit)
+      const CHUNK_SIZE = 50 * 1024 * 1024; // 50MB chunks
+      const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+      console.log('[Upload] File size:', file.size, 'Total chunks:', totalChunks);
 
       setUploadProgress({
         status: 'uploading',
         fileName: file.name,
-        chunksTotal: 1,
+        chunksTotal: totalChunks,
         chunksProcessed: 0,
       });
 
-      console.log('[Upload] Uploading file to server...');
-      const uploadRes = await fetch(`${API_URL}/api/sources/${source.id}/upload`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: formData,
-      });
+      // Upload each chunk
+      for (let i = 0; i < totalChunks; i++) {
+        const start = i * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, file.size);
+        const chunk = file.slice(start, end);
 
-      console.log('[Upload] Upload response status:', uploadRes.status);
+        console.log(`[Upload] Uploading chunk ${i + 1}/${totalChunks} (${start}-${end})`);
 
-      if (!uploadRes.ok) {
-        const errorText = await uploadRes.text();
-        console.error('[Upload] Upload failed:', errorText);
-        try {
-          const error = JSON.parse(errorText);
-          throw new Error(error.error || 'Upload failed');
-        } catch {
-          throw new Error('Upload failed: ' + errorText);
+        const formData = new FormData();
+        formData.append('file', chunk, file.name);
+        formData.append('chunkIndex', i.toString());
+        formData.append('totalChunks', totalChunks.toString());
+
+        const uploadRes = await fetch(`${API_URL}/api/sources/${source.id}/upload-chunk`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: formData,
+        });
+
+        console.log(`[Upload] Chunk ${i + 1} response status:`, uploadRes.status);
+
+        if (!uploadRes.ok) {
+          const errorText = await uploadRes.text();
+          console.error('[Upload] Chunk upload failed:', errorText);
+          throw new Error('Chunk upload failed: ' + errorText);
         }
+
+        setUploadProgress(prev => ({
+          ...prev,
+          chunksProcessed: i + 1,
+        }));
       }
 
-      const uploadResult = await uploadRes.json();
-      console.log('[Upload] Upload successful:', uploadResult);
+      // Signal upload complete, start processing
+      console.log('[Upload] All chunks uploaded, starting processing...');
+      const processRes = await fetch(`${API_URL}/api/sources/${source.id}/process`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ totalChunks }),
+      });
+
+      if (!processRes.ok) {
+        const errorText = await processRes.text();
+        console.error('[Upload] Process start failed:', errorText);
+        throw new Error('Failed to start processing: ' + errorText);
+      }
+
+      const processResult = await processRes.json();
+      console.log('[Upload] Processing started:', processResult);
 
       // Upload complete - server is now processing in background
       setUploadProgress({
