@@ -34,7 +34,10 @@ const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 app.use('*', cors({
   origin: ['http://localhost:3000', 'https://email-intelligence.pages.dev', 'https://qmdemon.com', 'https://www.qmdemon.com', 'https://qmdemon.pages.dev'],
   allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'Authorization'],
+  allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposeHeaders: ['Content-Length', 'Content-Type'],
+  maxAge: 86400,
+  credentials: true,
 }));
 
 // Health check
