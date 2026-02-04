@@ -30,6 +30,12 @@ type Variables = {
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
+// Global error handler
+app.onError((err, c) => {
+  console.error('[GlobalError]', err);
+  return c.json({ error: err.message || 'Internal server error' }, 500);
+});
+
 // CORS for frontend
 app.use('*', cors({
   origin: ['http://localhost:3000', 'https://email-intelligence.pages.dev', 'https://qmdemon.com', 'https://www.qmdemon.com', 'https://qmdemon.pages.dev'],
@@ -628,8 +634,13 @@ app.get('/api/analytics', async (c) => {
  */
 app.get('/api/sources', async (c) => {
   const userId = c.get('userId');
-  const sources = await listSources(userId, c.env);
-  return c.json({ sources });
+  try {
+    const sources = await listSources(userId, c.env);
+    return c.json({ sources });
+  } catch (e) {
+    console.error('[ListSources] Error:', e);
+    return c.json({ error: e instanceof Error ? e.message : 'Failed to list sources' }, 500);
+  }
 });
 
 /**
