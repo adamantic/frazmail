@@ -24,7 +24,7 @@
   transform: translateX(-50%);
   width: 32px;
   height: 28px;
-  background: #0ea5e9;
+  background: #ef4444;
   border-radius: 8px 8px 12px 12px;
   box-shadow: inset -4px -4px 0 rgba(0, 0, 0, 0.1);
 }
@@ -36,7 +36,7 @@
   transform: translateX(-50%);
   width: 36px;
   height: 28px;
-  background: #0ea5e9;
+  background: #ef4444;
   border-radius: 50% 50% 45% 45%;
   box-shadow: inset -4px -4px 0 rgba(0, 0, 0, 0.1);
 }
@@ -47,7 +47,7 @@
   top: -8px;
   width: 8px;
   height: 14px;
-  background: #0369a1;
+  background: #b91c1c;
   border-radius: 50% 50% 20% 20%;
 }
 
@@ -99,7 +99,7 @@
   transform: translateX(-50%);
   width: 8px;
   height: 4px;
-  background: #0369a1;
+  background: #b91c1c;
   border-radius: 0 0 50% 50%;
   transition: height 0.2s ease;
 }
@@ -129,7 +129,7 @@
   bottom: 16px;
   width: 6px;
   height: 14px;
-  background: #0ea5e9;
+  background: #ef4444;
   border-radius: 4px;
   transform-origin: top center;
 }
@@ -150,7 +150,7 @@
   bottom: 0;
   width: 8px;
   height: 12px;
-  background: #0ea5e9;
+  background: #ef4444;
   border-radius: 4px 4px 6px 6px;
   transform-origin: top center;
 }
@@ -170,7 +170,7 @@
   right: -8px;
   width: 16px;
   height: 6px;
-  background: #0ea5e9;
+  background: #ef4444;
   border-radius: 0 50% 50% 0;
   transform-origin: left center;
 }
@@ -182,7 +182,7 @@
   top: -2px;
   width: 0;
   height: 0;
-  border-left: 8px solid #0369a1;
+  border-left: 8px solid #b91c1c;
   border-top: 5px solid transparent;
   border-bottom: 5px solid transparent;
 }
