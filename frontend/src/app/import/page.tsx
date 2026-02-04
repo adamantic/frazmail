@@ -66,6 +66,8 @@ export default function ImportPage() {
     fileName?: string;
     total?: number;
     processed?: number;
+    chunksTotal?: number;
+    chunksProcessed?: number;
     error?: string;
   }>({ status: 'idle' });
 
@@ -167,25 +169,30 @@ export default function ImportPage() {
         body: JSON.stringify({ emails_total: 0 }),
       });
 
-      setUploadProgress({
-        status: 'uploading',
-        fileName: file.name,
-        total: 0,
-        processed: 0,
-      });
-
       // Process file in streaming chunks
       const chunkSize = 1024 * 1024; // 1MB chunks
       const batchSize = 25;
       let buffer = '';
       let batch: ParsedEmail[] = [];
       let offset = 0;
+      const totalChunks = Math.ceil(file.size / chunkSize);
+      let chunksProcessed = 0;
+
+      setUploadProgress({
+        status: 'uploading',
+        fileName: file.name,
+        total: 0,
+        processed: 0,
+        chunksTotal: totalChunks,
+        chunksProcessed: 0,
+      });
 
       while (offset < file.size) {
         // Read a chunk
         const chunk = await file.slice(offset, offset + chunkSize).text();
         buffer += chunk;
         offset += chunkSize;
+        chunksProcessed++;
 
         // Find complete emails in buffer (split on "From " lines)
         const lines = buffer.split(/\r?\n/);
@@ -226,6 +233,7 @@ export default function ImportPage() {
                   ...prev,
                   total: emailCount,
                   processed: totalProcessed,
+                  chunksProcessed,
                 }));
                 await new Promise(r => setTimeout(r, 0));
               }
@@ -400,11 +408,16 @@ function UploadProgressCard({
     fileName?: string;
     total?: number;
     processed?: number;
+    chunksTotal?: number;
+    chunksProcessed?: number;
     error?: string;
   };
   onClose: () => void;
 }) {
-  const percentage = progress.total ? Math.round((progress.processed || 0) / progress.total * 100) : 0;
+  const chunkPercentage = progress.chunksTotal
+    ? Math.round((progress.chunksProcessed || 0) / progress.chunksTotal * 100)
+    : 0;
+  const emailPercentage = progress.total ? Math.round((progress.processed || 0) / progress.total * 100) : 0;
 
   return (
     <div className={`mb-6 p-4 rounded-lg border ${
@@ -425,9 +438,14 @@ function UploadProgressCard({
               {progress.status === 'complete' && `Import complete!`}
               {progress.status === 'error' && `Import failed`}
             </div>
-            {progress.status === 'uploading' && progress.total && (
+            {progress.status === 'uploading' && progress.chunksTotal && (
               <div className="text-sm text-gray-600 mt-1">
-                {progress.processed?.toLocaleString()} / {progress.total.toLocaleString()} emails ({percentage}%)
+                <span className="font-medium">Reading file:</span> {progress.chunksProcessed} / {progress.chunksTotal} chunks ({chunkPercentage}%)
+                {(progress.total ?? 0) > 0 && (
+                  <span className="ml-3">
+                    <span className="font-medium">Uploaded:</span> {progress.processed?.toLocaleString()} / {progress.total?.toLocaleString()} emails
+                  </span>
+                )}
               </div>
             )}
             {progress.status === 'complete' && (
@@ -446,11 +464,11 @@ function UploadProgressCard({
           </button>
         )}
       </div>
-      {progress.status === 'uploading' && progress.total && (
+      {progress.status === 'uploading' && progress.chunksTotal && (
         <div className="mt-3 h-2 bg-white rounded-full overflow-hidden">
           <div
             className="h-full bg-blue-500 transition-all duration-300"
-            style={{ width: `${percentage}%` }}
+            style={{ width: `${chunkPercentage}%` }}
           />
         </div>
       )}
