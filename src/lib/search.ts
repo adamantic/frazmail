@@ -85,9 +85,12 @@ async function searchFTS(
   userId: string,
   env: Env
 ): Promise<IntermediateResult[]> {
-  // Build FTS query
+  // Build FTS query - escape each word in double quotes to prevent FTS5 injection
   const ftsQuery = queries
-    .map(q => q.split(/\s+/).filter(w => w.length > 2).join(' AND '))
+    .map(q => q.split(/\s+/)
+      .filter(w => w.length > 2)
+      .map(w => `"${w.replace(/"/g, '""')}"`)
+      .join(' AND '))
     .join(' OR ');
 
   if (!ftsQuery) return [];
@@ -310,50 +313,54 @@ function reciprocalRankFusion(
 
 /**
  * Step 4: LLM Re-ranking
- * Uses language model to score relevance of top candidates
+ * Sends all candidates in a single prompt and parses JSON scores
  */
 async function rerankWithLLM(
   query: string,
   candidates: IntermediateResult[],
   env: Env
 ): Promise<IntermediateResult[]> {
-  // Process in batches to avoid rate limits
-  const batchSize = 10;
-  const results: IntermediateResult[] = [];
+  if (candidates.length === 0) return [];
 
-  for (let i = 0; i < candidates.length; i += batchSize) {
-    const batch = candidates.slice(i, i + batchSize);
+  try {
+    // Build a single prompt with all candidates
+    const candidateList = candidates.map((doc, i) =>
+      `${i}: Subject: "${doc.subject}" | Preview: "${(doc.snippet || '').slice(0, 150).replace(/"/g, '\\"')}"`
+    ).join('\n');
 
-    const scored = await Promise.all(
-      batch.map(async (doc) => {
-        try {
-          const response = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
-            prompt: `Rate how relevant this email is to the search query on a scale of 0-10.
+    const response = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
+      prompt: `Rate how relevant each email is to the search query on a scale of 0-10.
 Query: "${query}"
-Email subject: "${doc.subject}"
-Email preview: "${doc.snippet?.slice(0, 200) || 'No preview available'}"
 
-Respond with only a single number from 0 to 10.`,
-            max_tokens: 5,
-          });
+Emails:
+${candidateList}
 
-          const scoreText = (response as any).response?.trim();
-          const score = parseInt(scoreText, 10);
+Respond with ONLY a JSON array of numbers (scores 0-10), one per email, in order. Example: [8, 3, 5, 7]`,
+      max_tokens: candidates.length * 4 + 10,
+    });
 
-          return {
-            ...doc,
-            rerank_score: isNaN(score) ? 5 : Math.min(10, Math.max(0, score)) / 10,
-          };
-        } catch (e) {
-          return { ...doc, rerank_score: 0.5 };
-        }
-      })
-    );
+    const scoreText = (response as any).response?.trim();
 
-    results.push(...scored);
+    // Parse the JSON array
+    const jsonMatch = scoreText.match(/\[[\d\s,]+\]/);
+    if (jsonMatch) {
+      const scores: number[] = JSON.parse(jsonMatch[0]);
+      return candidates.map((doc, i) => {
+        const score = scores[i];
+        return {
+          ...doc,
+          rerank_score: (score !== undefined && !isNaN(score))
+            ? Math.min(10, Math.max(0, score)) / 10
+            : 0.5,
+        };
+      });
+    }
+  } catch (e) {
+    console.error('Batched LLM reranking failed:', e);
   }
 
-  return results;
+  // Fallback: assign neutral scores
+  return candidates.map(doc => ({ ...doc, rerank_score: 0.5 }));
 }
 
 /**

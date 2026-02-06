@@ -17,6 +17,8 @@ interface AuthContextType {
   needsSetup: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (email: string, password: string, name?: string) => Promise<{ success: boolean; error?: string }>;
+  loginWithGoogle: (code: string) => Promise<{ success: boolean; error?: string }>;
+  googleClientId: string | null;
   logout: () => Promise<void>;
 }
 
@@ -135,6 +137,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || null;
+
+  const loginWithGoogle = async (code: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const response = await fetch(`${API_URL}/api/auth/google/callback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code,
+          redirect_uri: window.location.origin + '/login',
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return { success: false, error: data.error || 'Google login failed' };
+      }
+
+      setToken(data.token);
+      setUser(data.user);
+      localStorage.setItem('auth_token', data.token);
+      localStorage.setItem('auth_user', JSON.stringify(data.user));
+      setNeedsSetup(false);
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: 'Network error' };
+    }
+  };
+
   const logout = async (): Promise<void> => {
     if (token) {
       try {
@@ -164,6 +196,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         needsSetup,
         login,
         register,
+        loginWithGoogle,
+        googleClientId,
         logout,
       }}
     >

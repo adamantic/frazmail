@@ -3,11 +3,24 @@ export interface Env {
   DB: D1Database;
   VECTORIZE: VectorizeIndex;
   AI: Ai;
-  ATTACHMENTS?: R2Bucket;
+  ATTACHMENTS: R2Bucket;
   CACHE: KVNamespace;
   SESSIONS: KVNamespace;
+  EMAIL_QUEUE: Queue<QueueMessage>;
+  AUTH_SECRET: string;
+  GOOGLE_CLIENT_ID: string;
+  GOOGLE_CLIENT_SECRET: string;
   ENVIRONMENT: string;
 }
+
+// Queue message types (discriminated union)
+export type QueueMessage =
+  | { type: 'process-chunk'; sourceId: string; userId: string; chunkIndex: number; totalChunks: number }
+  | { type: 'process-email'; sourceId: string; userId: string; email: IngestEmailRequest }
+  | { type: 'process-email-ref'; sourceId: string; userId: string; r2Key: string; subject: string; message_id: string; from_email: string; from_name?: string; to: { email: string; name?: string }[]; cc?: { email: string; name?: string }[]; sent_at: string; in_reply_to?: string; references?: string[] };
+
+// Legacy alias for backward compatibility during migration
+export type EmailQueueMessage = Extract<QueueMessage, { type: 'process-email' }>;
 
 // User types
 export interface User {

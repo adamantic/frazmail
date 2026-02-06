@@ -197,7 +197,7 @@ export async function getCompanies(params?: {
 export async function getCompany(id: string): Promise<{
   company: Company;
   contacts: Contact[];
-  recent_emails: { id: string; subject: string; sent_at: string; from_email: string }[];
+  recent_emails: { id: string; subject: string; sent_at: string; from_email: string; from_name?: string | null }[];
 }> {
   return fetchAPI(`/api/companies/${id}`);
 }

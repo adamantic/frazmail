@@ -71,15 +71,18 @@ export default function ImportPage() {
     }
   }, []);
 
+  const sourcesRef = useRef(sources);
+  sourcesRef.current = sources;
+
   useEffect(() => {
     fetchSources();
     const interval = setInterval(() => {
-      if (sources.some(s => s.status === 'processing')) {
+      if (sourcesRef.current.some(s => s.status === 'processing')) {
         fetchSources();
       }
     }, 5000);
     return () => clearInterval(interval);
-  }, [fetchSources, sources]);
+  }, [fetchSources]);
 
   const toggleIncluded = async (source: EmailSource) => {
     try {
@@ -168,17 +171,18 @@ export default function ImportPage() {
         chunksProcessed: 0,
       });
 
-      // Upload each chunk
-      for (let i = 0; i < totalChunks; i++) {
-        const start = i * CHUNK_SIZE;
+      // Upload chunks with concurrency (4 at a time)
+      const CONCURRENCY = 4;
+      let completedChunks = 0;
+
+      const uploadChunk = async (chunkIdx: number) => {
+        const start = chunkIdx * CHUNK_SIZE;
         const end = Math.min(start + CHUNK_SIZE, file.size);
         const chunk = file.slice(start, end);
 
-        console.log(`[Upload] Uploading chunk ${i + 1}/${totalChunks} (${start}-${end})`);
-
         const formData = new FormData();
         formData.append('file', chunk, file.name);
-        formData.append('chunkIndex', i.toString());
+        formData.append('chunkIndex', chunkIdx.toString());
         formData.append('totalChunks', totalChunks.toString());
 
         const uploadRes = await fetch(`${API_URL}/api/sources/${source.id}/upload-chunk`, {
@@ -187,18 +191,25 @@ export default function ImportPage() {
           body: formData,
         });
 
-        console.log(`[Upload] Chunk ${i + 1} response status:`, uploadRes.status);
-
         if (!uploadRes.ok) {
           const errorText = await uploadRes.text();
-          console.error('[Upload] Chunk upload failed:', errorText);
-          throw new Error('Chunk upload failed: ' + errorText);
+          throw new Error(`Chunk ${chunkIdx + 1} upload failed: ${errorText}`);
         }
 
+        completedChunks++;
         setUploadProgress(prev => ({
           ...prev,
-          chunksProcessed: i + 1,
+          chunksProcessed: completedChunks,
         }));
+      };
+
+      // Process chunks in parallel batches
+      for (let i = 0; i < totalChunks; i += CONCURRENCY) {
+        const batch = [];
+        for (let j = i; j < Math.min(i + CONCURRENCY, totalChunks); j++) {
+          batch.push(uploadChunk(j));
+        }
+        await Promise.all(batch);
       }
 
       // Signal upload complete, start processing

@@ -10,6 +10,40 @@ interface TokenPayload {
 }
 
 /**
+ * Import HMAC key from AUTH_SECRET for token signing
+ */
+async function getSigningKey(secret: string): Promise<CryptoKey> {
+  const encoder = new TextEncoder();
+  return crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign', 'verify']
+  );
+}
+
+/**
+ * Convert ArrayBuffer to hex string
+ */
+function bufToHex(buf: ArrayBuffer): string {
+  return Array.from(new Uint8Array(buf))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/**
+ * Convert hex string to Uint8Array
+ */
+function hexToBuf(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
+  }
+  return bytes;
+}
+
+/**
  * Hash password using Web Crypto API (PBKDF2)
  */
 async function hashPassword(password: string): Promise<string> {
@@ -74,38 +108,57 @@ async function verifyPassword(password: string, storedHash: string): Promise<boo
       256
     );
 
-    // Compare hashes
+    // Constant-time comparison to prevent timing attacks
     const hashBytes = new Uint8Array(hash);
     if (hashBytes.length !== storedHashBytes.length) return false;
 
+    let diff = 0;
     for (let i = 0; i < hashBytes.length; i++) {
-      if (hashBytes[i] !== storedHashBytes[i]) return false;
+      diff |= hashBytes[i] ^ storedHashBytes[i];
     }
 
-    return true;
+    return diff === 0;
   } catch {
     return false;
   }
 }
 
 /**
- * Create auth token with user_id
+ * Create HMAC-signed auth token with user_id
  */
-export function createToken(userId: string): string {
+export async function createToken(userId: string, env: Env): Promise<string> {
   const payload: TokenPayload = {
     user_id: userId,
     iat: Date.now(),
     exp: Date.now() + TOKEN_EXPIRY,
   };
-  return btoa(JSON.stringify(payload));
+  const payloadB64 = btoa(JSON.stringify(payload));
+  const key = await getSigningKey(env.AUTH_SECRET);
+  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payloadB64));
+  return `${payloadB64}.${bufToHex(signature)}`;
 }
 
 /**
- * Verify token is valid and not expired
+ * Verify token signature and expiration
  */
-export function verifyToken(token: string): boolean {
+export async function verifyToken(token: string, env: Env): Promise<boolean> {
   try {
-    const payload: TokenPayload = JSON.parse(atob(token));
+    const dotIndex = token.indexOf('.');
+    if (dotIndex === -1) return false;
+
+    const payloadB64 = token.substring(0, dotIndex);
+    const signatureHex = token.substring(dotIndex + 1);
+
+    const key = await getSigningKey(env.AUTH_SECRET);
+    const valid = await crypto.subtle.verify(
+      'HMAC',
+      key,
+      hexToBuf(signatureHex),
+      new TextEncoder().encode(payloadB64)
+    );
+    if (!valid) return false;
+
+    const payload: TokenPayload = JSON.parse(atob(payloadB64));
     return payload.exp > Date.now();
   } catch {
     return false;
@@ -113,12 +166,16 @@ export function verifyToken(token: string): boolean {
 }
 
 /**
- * Extract user_id from token
+ * Extract user_id from a verified token
  */
-export function getUserIdFromToken(token: string): string | null {
+export async function getUserIdFromToken(token: string, env: Env): Promise<string | null> {
   try {
-    const payload: TokenPayload = JSON.parse(atob(token));
-    if (payload.exp <= Date.now()) return null;
+    const isValid = await verifyToken(token, env);
+    if (!isValid) return null;
+
+    const dotIndex = token.indexOf('.');
+    const payloadB64 = token.substring(0, dotIndex);
+    const payload: TokenPayload = JSON.parse(atob(payloadB64));
     return payload.user_id;
   } catch {
     return null;
@@ -213,6 +270,50 @@ export async function hasUsers(env: Env): Promise<boolean> {
 }
 
 /**
+ * Find or create a user via OAuth (Google).
+ * - If oauth_provider + oauth_id match → return existing user
+ * - If email matches an existing user → link OAuth columns and return user
+ * - Otherwise → create new user with password_hash = NULL
+ */
+export async function findOrCreateOAuthUser(
+  googleId: string,
+  email: string,
+  name: string | null,
+  env: Env
+): Promise<User> {
+  const normalizedEmail = email.toLowerCase().trim();
+
+  // 1. Check by OAuth identity
+  const existing = await env.DB.prepare(`
+    SELECT id, email, name, created_at FROM users
+    WHERE oauth_provider = 'google' AND oauth_id = ?
+  `).bind(googleId).first<User>();
+
+  if (existing) return existing;
+
+  // 2. Check by email — link OAuth to existing account
+  const byEmail = await env.DB.prepare(`
+    SELECT id, email, name, created_at FROM users WHERE email = ?
+  `).bind(normalizedEmail).first<User>();
+
+  if (byEmail) {
+    await env.DB.prepare(`
+      UPDATE users SET oauth_provider = 'google', oauth_id = ? WHERE id = ?
+    `).bind(googleId, byEmail.id).run();
+    return byEmail;
+  }
+
+  // 3. Create new OAuth-only user (no password)
+  const id = crypto.randomUUID();
+  await env.DB.prepare(`
+    INSERT INTO users (id, email, name, password_hash, oauth_provider, oauth_id)
+    VALUES (?, ?, ?, NULL, 'google', ?)
+  `).bind(id, normalizedEmail, name, googleId).run();
+
+  return { id, email: normalizedEmail, name, created_at: new Date().toISOString() };
+}
+
+/**
  * Check if email is already registered
  */
 export async function emailExists(email: string, env: Env): Promise<boolean> {
@@ -239,9 +340,9 @@ export async function storeSession(token: string, userId: string, env: Env): Pro
  * Verify session and get user_id
  */
 export async function verifySession(token: string, env: Env): Promise<string | null> {
-  if (!verifyToken(token)) return null;
+  if (!(await verifyToken(token, env))) return null;
 
-  const userId = getUserIdFromToken(token);
+  const userId = await getUserIdFromToken(token, env);
   if (!userId) return null;
 
   if (env.SESSIONS) {

@@ -56,9 +56,9 @@ async function ingestSingleEmail(
   // 3. Determine thread ID
   const threadId = await resolveThreadId(email, userId, env);
 
-  // 4. Insert email with source_id and user_id
-  await env.DB.prepare(`
-    INSERT INTO emails (id, message_id, thread_id, subject, body_text, body_html, sent_at, from_contact_id, has_attachments, source_id, user_id)
+  // 4. Insert email with source_id and user_id (OR IGNORE to handle duplicate message_id)
+  const insertResult = await env.DB.prepare(`
+    INSERT OR IGNORE INTO emails (id, message_id, thread_id, subject, body_text, body_html, sent_at, from_contact_id, has_attachments, source_id, user_id)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     emailId,
@@ -73,6 +73,11 @@ async function ingestSingleEmail(
     sourceId,
     userId
   ).run();
+
+  // Skip if duplicate message_id
+  if (insertResult.meta.changes === 0) {
+    return;
+  }
 
   // 5. Insert recipients
   for (const contact of toContacts) {
@@ -334,4 +339,299 @@ async function updateContactStats(
     WHERE id = (SELECT company_id FROM contacts WHERE id = ? AND user_id = ?)
       AND user_id = ?
   `).bind(sentAt, contactId, userId, userId).run();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PARALLEL PROCESSING FOR QUEUE CONSUMER
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Process emails in parallel with batched DB operations and embeddings
+ */
+export async function ingestEmailsParallel(
+  emails: IngestEmailRequest[],
+  sourceId: string | null,
+  userId: string,
+  env: Env
+): Promise<IngestBatchResponse> {
+  const results: IngestBatchResponse = {
+    processed: 0,
+    failed: 0,
+    errors: [],
+  };
+
+  if (emails.length === 0) return results;
+
+  // 1. Deduplicate contacts across batch (in-memory)
+  const uniqueEmails = new Set<string>();
+  for (const email of emails) {
+    uniqueEmails.add(email.from_email.toLowerCase());
+    email.to.forEach(r => uniqueEmails.add(r.email.toLowerCase()));
+    (email.cc || []).forEach(r => uniqueEmails.add(r.email.toLowerCase()));
+  }
+
+  // 2. Batch-fetch existing contacts and create missing ones
+  const contactMap = await batchGetOrCreateContacts(
+    Array.from(uniqueEmails),
+    emails,
+    userId,
+    env
+  );
+
+  // 3. Process emails in parallel (groups of 10)
+  const chunks = chunkArray(emails, 10);
+  const processedEmails: { id: string; email: IngestEmailRequest }[] = [];
+
+  for (const chunk of chunks) {
+    const chunkResults = await Promise.all(
+      chunk.map(async (email) => {
+        try {
+          const emailId = await ingestSingleEmailOptimized(email, sourceId, userId, contactMap, env);
+          processedEmails.push({ id: emailId, email });
+          return { success: true as const };
+        } catch (e) {
+          return {
+            success: false as const,
+            error: e instanceof Error ? e.message : 'Unknown error',
+            messageId: email.message_id,
+          };
+        }
+      })
+    );
+
+    for (const r of chunkResults) {
+      if (r.success) {
+        results.processed++;
+      } else {
+        results.failed++;
+        results.errors.push({
+          message_id: r.messageId || 'unknown',
+          error: r.error || 'Unknown error',
+        });
+      }
+    }
+  }
+
+  // 4. Batch create embeddings for successfully processed emails
+  if (processedEmails.length > 0) {
+    await batchCreateEmbeddings(processedEmails, contactMap, userId, env);
+  }
+
+  return results;
+}
+
+/**
+ * Ingest a single email with pre-resolved contacts (no embedding - done in batch)
+ */
+async function ingestSingleEmailOptimized(
+  email: IngestEmailRequest,
+  sourceId: string | null,
+  userId: string,
+  contactMap: Map<string, { id: string; email: string }>,
+  env: Env
+): Promise<string> {
+  const emailId = crypto.randomUUID();
+
+  // Get contacts from pre-resolved map
+  const fromContact = contactMap.get(email.from_email.toLowerCase());
+  if (!fromContact) {
+    throw new Error(`Contact not found for ${email.from_email}`);
+  }
+
+  const toContacts = email.to
+    .map(r => contactMap.get(r.email.toLowerCase()))
+    .filter((c): c is { id: string; email: string } => c !== undefined);
+
+  const ccContacts = (email.cc || [])
+    .map(r => contactMap.get(r.email.toLowerCase()))
+    .filter((c): c is { id: string; email: string } => c !== undefined);
+
+  // Determine thread ID
+  const threadId = await resolveThreadId(email, userId, env);
+
+  // Insert email with source_id and user_id (OR IGNORE to handle duplicate message_id)
+  const insertResult = await env.DB.prepare(`
+    INSERT OR IGNORE INTO emails (id, message_id, thread_id, subject, body_text, body_html, sent_at, from_contact_id, has_attachments, source_id, user_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    emailId,
+    email.message_id,
+    threadId,
+    email.subject,
+    email.body_text,
+    email.body_html || null,
+    email.sent_at,
+    fromContact.id,
+    0,
+    sourceId,
+    userId
+  ).run();
+
+  // Skip recipients and stats if duplicate
+  if (insertResult.meta.changes === 0) {
+    return emailId;
+  }
+
+  // Batch insert: email + recipients + stats update
+  const statements: D1PreparedStatement[] = [];
+
+  for (const contact of toContacts) {
+    statements.push(
+      env.DB.prepare(`INSERT INTO email_recipients (email_id, contact_id, recipient_type) VALUES (?, ?, 'to')`)
+        .bind(emailId, contact.id)
+    );
+  }
+  for (const contact of ccContacts) {
+    statements.push(
+      env.DB.prepare(`INSERT INTO email_recipients (email_id, contact_id, recipient_type) VALUES (?, ?, 'cc')`)
+        .bind(emailId, contact.id)
+    );
+  }
+
+  // Contact stats update
+  statements.push(
+    env.DB.prepare(`UPDATE contacts SET email_count = email_count + 1, last_seen = MAX(last_seen, ?) WHERE id = ? AND user_id = ?`)
+      .bind(email.sent_at, fromContact.id, userId)
+  );
+  statements.push(
+    env.DB.prepare(`UPDATE companies SET total_emails = total_emails + 1, last_contact = MAX(last_contact, ?) WHERE id = (SELECT company_id FROM contacts WHERE id = ? AND user_id = ?) AND user_id = ?`)
+      .bind(email.sent_at, fromContact.id, userId, userId)
+  );
+
+  if (statements.length > 0) {
+    await env.DB.batch(statements);
+  }
+
+  return emailId;
+}
+
+/**
+ * Batch get or create contacts for a list of email addresses
+ */
+async function batchGetOrCreateContacts(
+  emailAddresses: string[],
+  emails: IngestEmailRequest[],
+  userId: string,
+  env: Env
+): Promise<Map<string, { id: string; email: string }>> {
+  const contactMap = new Map<string, { id: string; email: string }>();
+
+  if (emailAddresses.length === 0) return contactMap;
+
+  // Batch query existing contacts (D1 has a limit on query size, so chunk if needed)
+  const addressChunks = chunkArray(emailAddresses, 50);
+
+  for (const chunk of addressChunks) {
+    const placeholders = chunk.map(() => '?').join(',');
+    const existing = await env.DB.prepare(`
+      SELECT id, email FROM contacts
+      WHERE email IN (${placeholders}) AND user_id = ?
+    `).bind(...chunk, userId).all<{ id: string; email: string }>();
+
+    for (const contact of existing.results || []) {
+      contactMap.set(contact.email.toLowerCase(), contact);
+    }
+  }
+
+  // Build name map from email headers for missing contacts
+  const nameMap = buildNameMap(emails);
+
+  // Create missing contacts in parallel (groups of 10)
+  const missing = emailAddresses.filter(e => !contactMap.has(e.toLowerCase()));
+  const missingChunks = chunkArray(missing, 10);
+
+  for (const chunk of missingChunks) {
+    await Promise.all(
+      chunk.map(async (emailAddr) => {
+        const contact = await getOrCreateContact(emailAddr, nameMap.get(emailAddr.toLowerCase()), userId, env);
+        contactMap.set(emailAddr.toLowerCase(), contact);
+      })
+    );
+  }
+
+  return contactMap;
+}
+
+/**
+ * Build a map of email addresses to names from email headers
+ */
+function buildNameMap(emails: IngestEmailRequest[]): Map<string, string | undefined> {
+  const nameMap = new Map<string, string | undefined>();
+
+  for (const email of emails) {
+    if (email.from_name) {
+      nameMap.set(email.from_email.toLowerCase(), email.from_name);
+    }
+    for (const r of email.to) {
+      if (r.name && !nameMap.has(r.email.toLowerCase())) {
+        nameMap.set(r.email.toLowerCase(), r.name);
+      }
+    }
+    for (const r of email.cc || []) {
+      if (r.name && !nameMap.has(r.email.toLowerCase())) {
+        nameMap.set(r.email.toLowerCase(), r.name);
+      }
+    }
+  }
+
+  return nameMap;
+}
+
+/**
+ * Batch create embeddings for multiple emails
+ */
+async function batchCreateEmbeddings(
+  processedEmails: { id: string; email: IngestEmailRequest }[],
+  contactMap: Map<string, { id: string; email: string }>,
+  userId: string,
+  env: Env
+): Promise<void> {
+  // Skip if Vectorize is not available (local dev mode)
+  if (!env.VECTORIZE?.upsert) {
+    console.log('Vectorize not available, skipping batch embeddings');
+    return;
+  }
+
+  try {
+    // Prepare texts for batch embedding
+    const texts = processedEmails.map(({ email }) =>
+      `${email.subject}\n\n${email.body_text.slice(0, 1000)}`
+    );
+
+    // Workers AI supports batch embedding
+    const result = await env.AI.run('@cf/baai/bge-base-en-v1.5', {
+      text: texts,
+    });
+
+    const embeddings = (result as { data: number[][] }).data;
+
+    // Upsert all vectors at once
+    const vectors = processedEmails.map(({ id, email }, i) => ({
+      id,
+      values: embeddings[i],
+      metadata: {
+        email_id: id,
+        subject: email.subject,
+        sent_at: email.sent_at,
+        from_email: email.from_email,
+        user_id: userId,
+      } as unknown as Record<string, string>,
+    }));
+
+    await env.VECTORIZE.upsert(vectors);
+  } catch (e) {
+    console.error('Failed to create batch embeddings:', e);
+    // Don't fail the entire ingestion if embedding fails
+  }
+}
+
+/**
+ * Split an array into chunks of a given size
+ */
+function chunkArray<T>(array: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < array.length; i += size) {
+    chunks.push(array.slice(i, i + size));
+  }
+  return chunks;
 }

@@ -57,13 +57,75 @@ export default function ContactsPage() {
         <div className="text-center py-12 text-gray-500">Loading contacts...</div>
       )}
 
-      {/* Contacts Grid */}
+      {/* Contacts List */}
       {!loading && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-            {contacts.map((contact) => (
-              <ContactCard key={contact.id} contact={contact} />
-            ))}
+          <div className="bg-white border border-gray-200 rounded-lg overflow-hidden mb-6">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Name
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Email
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Company
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Emails
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Last Seen
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {contacts.map((contact) => (
+                  <tr key={contact.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <a
+                        href={`/contacts/${contact.id}`}
+                        className="flex items-center gap-3"
+                      >
+                        <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
+                          <User className="h-4 w-4 text-gray-400" />
+                        </div>
+                        <span className="font-medium text-gray-900 hover:text-primary-600">
+                          {contact.name || '-'}
+                        </span>
+                      </a>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {contact.email}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {contact.company_name ? (
+                        <span className="flex items-center gap-1">
+                          <Building className="h-3 w-3" />
+                          {contact.company_name}
+                        </span>
+                      ) : (
+                        '-'
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <span className="flex items-center gap-1">
+                        <Mail className="h-4 w-4" />
+                        {contact.email_count}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-4 w-4" />
+                        {format(parseISO(contact.last_seen), 'MMM d, yyyy')}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
 
           {/* Pagination */}
@@ -104,44 +166,5 @@ export default function ContactsPage() {
         </div>
       )}
     </div>
-  );
-}
-
-function ContactCard({ contact }: { contact: Contact }) {
-  return (
-    <a
-      href={`/contacts/${contact.id}`}
-      className="block p-4 bg-white border border-gray-200 rounded-lg hover:border-primary-300 hover:shadow-sm transition-all"
-    >
-      <div className="flex items-start gap-3">
-        <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
-          <User className="h-5 w-5 text-gray-400" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <h3 className="font-medium text-gray-900 truncate">
-            {contact.name || contact.email}
-          </h3>
-          {contact.name && (
-            <p className="text-sm text-gray-500 truncate">{contact.email}</p>
-          )}
-          {contact.company_name && (
-            <p className="text-sm text-gray-400 truncate flex items-center gap-1 mt-1">
-              <Building className="h-3 w-3" />
-              {contact.company_name}
-            </p>
-          )}
-          <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
-            <span className="flex items-center gap-1">
-              <Mail className="h-3 w-3" />
-              {contact.email_count} emails
-            </span>
-            <span className="flex items-center gap-1">
-              <Clock className="h-3 w-3" />
-              {format(parseISO(contact.last_seen), 'MMM yyyy')}
-            </span>
-          </div>
-        </div>
-      </div>
-    </a>
   );
 }

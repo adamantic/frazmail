@@ -1,9 +1,17 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Search, Mail, Clock, ChevronRight, Filter, X } from 'lucide-react';
 import { search, type SearchRequest, type SearchResult, type SearchResponse } from '@/lib/api';
 import { format, parseISO } from 'date-fns';
+import DOMPurify from 'dompurify';
+
+const ALLOWED_TAGS = ['mark', 'p', 'br', 'b', 'i', 'em', 'strong', 'a', 'ul', 'ol', 'li', 'blockquote', 'pre', 'code', 'span', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'table', 'thead', 'tbody', 'tr', 'td', 'th', 'hr', 'img'];
+const ALLOWED_ATTR = ['href', 'src', 'alt', 'class', 'style', 'target', 'rel'];
+
+function sanitizeHTML(html: string): string {
+  return DOMPurify.sanitize(html, { ALLOWED_TAGS, ALLOWED_ATTR });
+}
 
 export default function SearchPage() {
   const [query, setQuery] = useState('');
@@ -149,55 +157,38 @@ export default function SearchPage() {
         </div>
       )}
 
-      {/* Results */}
-      <div className="space-y-4">
-        {results.map((result) => (
-          <div
-            key={result.email_id}
-            onClick={() => setSelectedEmail(result.email_id)}
-            className="p-4 bg-white border border-gray-200 rounded-lg hover:border-primary-300 hover:shadow-sm cursor-pointer transition-all"
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <Mail className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                  <span className="text-sm text-gray-600 truncate">
-                    {result.from_name || result.from_email}
-                  </span>
-                  <span className="text-gray-300">|</span>
-                  <span className="text-sm text-gray-400 flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    {format(parseISO(result.sent_at), 'MMM d, yyyy')}
-                  </span>
-                </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-1 truncate">
-                  {result.subject}
-                </h3>
-                <p
-                  className="text-gray-600 text-sm line-clamp-2"
-                  dangerouslySetInnerHTML={{ __html: result.snippet }}
+      {/* Results - Inbox Style */}
+      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <div className="divide-y divide-gray-100">
+          {results.map((result) => (
+            <div
+              key={result.email_id}
+              onClick={() => setSelectedEmail(result.email_id)}
+              className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors"
+            >
+              <div className="w-44 flex-shrink-0">
+                <span className="text-sm font-medium text-gray-900 truncate block">
+                  {result.from_name || result.from_email.split('@')[0]}
+                </span>
+              </div>
+              <div className="flex-1 min-w-0 flex items-center gap-2">
+                <span className="font-medium text-gray-900 truncate">
+                  {result.subject || '(No subject)'}
+                </span>
+                <span className="text-gray-400">-</span>
+                <span
+                  className="text-gray-500 truncate text-sm"
+                  dangerouslySetInnerHTML={{ __html: sanitizeHTML(result.snippet) }}
                 />
               </div>
-              <div className="ml-4 flex flex-col items-end">
-                <div className="text-xs text-gray-400 mb-1">
-                  Score: {(result.score * 100).toFixed(0)}%
-                </div>
-                <div className="flex gap-1">
-                  <span className="px-1.5 py-0.5 text-xs bg-blue-100 text-blue-700 rounded">
-                    FTS: {(result.score_breakdown.fts * 100).toFixed(0)}
-                  </span>
-                  <span className="px-1.5 py-0.5 text-xs bg-green-100 text-green-700 rounded">
-                    Vec: {(result.score_breakdown.vector * 100).toFixed(0)}
-                  </span>
-                  <span className="px-1.5 py-0.5 text-xs bg-purple-100 text-purple-700 rounded">
-                    AI: {(result.score_breakdown.rerank * 100).toFixed(0)}
-                  </span>
-                </div>
-                <ChevronRight className="h-5 w-5 text-gray-400 mt-2" />
+              <div className="w-24 flex-shrink-0 text-right">
+                <span className="text-sm text-gray-500">
+                  {format(parseISO(result.sent_at), 'MMM d')}
+                </span>
               </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       {/* Empty State */}
@@ -256,13 +247,14 @@ function EmailModal({ emailId, onClose }: { emailId: string; onClose: () => void
   const [email, setEmail] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  useState(() => {
+  useEffect(() => {
+    setLoading(true);
     import('@/lib/api').then(({ getEmail }) => {
       getEmail(emailId)
         .then(setEmail)
         .finally(() => setLoading(false));
     });
-  });
+  }, [emailId]);
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -322,7 +314,7 @@ function EmailModal({ emailId, onClose }: { emailId: string; onClose: () => void
                 <div
                   className="email-body prose max-w-none"
                   dangerouslySetInnerHTML={{
-                    __html: email.body_html || email.body_text.replace(/\n/g, '<br>')
+                    __html: sanitizeHTML(email.body_html || email.body_text.replace(/\n/g, '<br>'))
                   }}
                 />
               </div>

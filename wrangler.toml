@@ -5,6 +5,7 @@ account_id = "cd450d4f747613ef79fcbc24b3a4cc6f"
 
 [vars]
 ENVIRONMENT = "development"
+GOOGLE_CLIENT_ID = "824514196234-ugf8ic4uorckmi88ggqqq35crue3asqn.apps.googleusercontent.com"
 
 # D1 Database
 [[d1_databases]]
@@ -21,25 +22,77 @@ index_name = "email-vectors"
 [ai]
 binding = "AI"
 
-# R2 Bucket for attachments (enable R2 in dashboard first)
-# [[r2_buckets]]
-# binding = "ATTACHMENTS"
-# bucket_name = "email-attachments"
+# R2 Bucket for attachments and upload chunks
+[[r2_buckets]]
+binding = "ATTACHMENTS"
+bucket_name = "email-attachments"
 
 # KV for caching
 [[kv_namespaces]]
 binding = "CACHE"
 id = "b8dfa9e756484a4b8ed0b74eb8b02934"
 
-# KV for sessions (use same KV for simplicity in dev)
+# KV for sessions (MUST be separate from CACHE to prevent key collisions)
 [[kv_namespaces]]
 binding = "SESSIONS"
-id = "b8dfa9e756484a4b8ed0b74eb8b02934"
+id = "a4bc96b19f704da9b575063a4a45a892"
+
+# Queue for email processing
+[[queues.producers]]
+binding = "EMAIL_QUEUE"
+queue = "email-processing"
+
+[[queues.consumers]]
+queue = "email-processing"
+max_batch_size = 50
+max_batch_timeout = 30
+max_retries = 3
 
 [env.production]
-vars = { ENVIRONMENT = "production" }
+vars = { ENVIRONMENT = "production", GOOGLE_CLIENT_ID = "824514196234-ugf8ic4uorckmi88ggqqq35crue3asqn.apps.googleusercontent.com" }
 
 # Custom domain route
 routes = [
   { pattern = "api.qmdemon.com", custom_domain = true }
 ]
+
+# D1 Database (production)
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "email-db"
+database_id = "2b10acd3-0c52-4abe-93e5-87f581b6d8d6"
+
+# Vectorize Index (production)
+[[env.production.vectorize]]
+binding = "VECTORIZE"
+index_name = "email-vectors"
+
+# Workers AI (production)
+[env.production.ai]
+binding = "AI"
+
+# R2 Bucket for attachments and upload chunks (production)
+[[env.production.r2_buckets]]
+binding = "ATTACHMENTS"
+bucket_name = "email-attachments"
+
+# KV for caching (production)
+[[env.production.kv_namespaces]]
+binding = "CACHE"
+id = "b8dfa9e756484a4b8ed0b74eb8b02934"
+
+# KV for sessions (production - MUST be separate from CACHE)
+[[env.production.kv_namespaces]]
+binding = "SESSIONS"
+id = "a4bc96b19f704da9b575063a4a45a892"
+
+# Queue for email processing (production)
+[[env.production.queues.producers]]
+binding = "EMAIL_QUEUE"
+queue = "email-processing"
+
+[[env.production.queues.consumers]]
+queue = "email-processing"
+max_batch_size = 50
+max_batch_timeout = 30
+max_retries = 3

@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import type { Env, SearchRequest, IngestEmailRequest, ContactTimeline, AnalyticsSummary } from '../types';
+import type { Env, SearchRequest, IngestEmailRequest, ContactTimeline, AnalyticsSummary, QueueMessage } from '../types';
 import { hybridSearch } from '../lib/search';
-import { ingestEmailsWithSource } from '../lib/ingest';
+import { ingestEmailsWithSource, ingestEmailsParallel } from '../lib/ingest';
 import {
   createSource,
   getSource,
@@ -22,6 +22,7 @@ import {
   hasUsers,
   emailExists,
   getUserById,
+  findOrCreateOAuthUser,
 } from '../lib/auth';
 
 type Variables = {
@@ -90,7 +91,7 @@ app.post('/api/auth/register', async (c) => {
 
   const user = await createUser(body.email, body.password, body.name || null, c.env);
 
-  const token = createToken(user.id);
+  const token = await createToken(user.id, c.env);
   await storeSession(token, user.id, c.env);
 
   return c.json({
@@ -119,7 +120,7 @@ app.post('/api/auth/login', async (c) => {
     return c.json({ error: 'Invalid email or password' }, 401);
   }
 
-  const token = createToken(user.id);
+  const token = await createToken(user.id, c.env);
   await storeSession(token, user.id, c.env);
 
   return c.json({
@@ -170,6 +171,69 @@ app.get('/api/auth/verify', async (c) => {
       email: user.email,
       name: user.name,
     } : null,
+  });
+});
+
+/**
+ * POST /api/auth/google/callback
+ * Exchange Google OAuth authorization code for user session
+ */
+app.post('/api/auth/google/callback', async (c) => {
+  const body = await c.req.json<{ code: string; redirect_uri: string }>();
+
+  if (!body.code || !body.redirect_uri) {
+    return c.json({ error: 'code and redirect_uri are required' }, 400);
+  }
+
+  // Exchange authorization code for access token
+  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      code: body.code,
+      client_id: c.env.GOOGLE_CLIENT_ID,
+      client_secret: c.env.GOOGLE_CLIENT_SECRET,
+      redirect_uri: body.redirect_uri,
+      grant_type: 'authorization_code',
+    }),
+  });
+
+  if (!tokenResponse.ok) {
+    const err = await tokenResponse.text();
+    console.error('[GoogleOAuth] Token exchange failed:', err);
+    return c.json({ error: 'Failed to exchange authorization code' }, 400);
+  }
+
+  const tokenData = await tokenResponse.json<{ access_token: string }>();
+
+  // Fetch user profile from Google
+  const profileResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+    headers: { Authorization: `Bearer ${tokenData.access_token}` },
+  });
+
+  if (!profileResponse.ok) {
+    return c.json({ error: 'Failed to fetch Google profile' }, 400);
+  }
+
+  const profile = await profileResponse.json<{ id: string; email: string; name: string }>();
+
+  if (!profile.email) {
+    return c.json({ error: 'Google account has no email address' }, 400);
+  }
+
+  // Find or create user
+  const user = await findOrCreateOAuthUser(profile.id, profile.email, profile.name || null, c.env);
+
+  const token = await createToken(user.id, c.env);
+  await storeSession(token, user.id, c.env);
+
+  return c.json({
+    token,
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+    },
   });
 });
 
@@ -248,7 +312,7 @@ app.get('/api/search/quick', async (c) => {
       AND e.user_id = ?
     ORDER BY bm25(emails_fts)
     LIMIT 10
-  `).bind(query + '*', userId).all();
+  `).bind(`"${query.replace(/"/g, '""')}"*`, userId).all();
 
   return c.json({ results: results.results || [] });
 });
@@ -531,14 +595,14 @@ app.get('/api/companies/:id', async (c) => {
     SELECT * FROM contacts WHERE company_id = ? AND user_id = ? ORDER BY email_count DESC
   `).bind(id, userId).all();
 
-  // Recent emails with this company
+  // All emails with this company
   const recentEmails = await c.env.DB.prepare(`
-    SELECT e.id, e.subject, e.sent_at, ct.email as from_email
+    SELECT e.id, e.subject, e.sent_at, ct.email as from_email, ct.name as from_name
     FROM emails e
     JOIN contacts ct ON e.from_contact_id = ct.id
     WHERE ct.company_id = ? AND e.user_id = ?
     ORDER BY e.sent_at DESC
-    LIMIT 20
+    LIMIT 500
   `).bind(id, userId).all();
 
   return c.json({
@@ -797,7 +861,7 @@ app.post('/api/sources/:id/complete', async (c) => {
 
 /**
  * POST /api/sources/:id/upload-chunk
- * Upload a chunk of a large file
+ * Upload a chunk of a large file to R2 (binary-safe, no TTL expiry)
  */
 app.post('/api/sources/:id/upload-chunk', async (c) => {
   console.log('[UploadChunk] Received chunk upload request');
@@ -838,30 +902,27 @@ app.post('/api/sources/:id/upload-chunk', async (c) => {
     return c.json({ error: 'chunkIndex out of range' }, 400);
   }
 
-  // KV values are limited to 25MB; keep a safety margin.
-  const MAX_CHUNK_BYTES = 20 * 1024 * 1024;
-  if (file.size > MAX_CHUNK_BYTES) {
-    return c.json({ error: `Chunk too large (max ${MAX_CHUNK_BYTES} bytes)` }, 413);
-  }
+  // Use arrayBuffer() instead of text() to preserve binary content
+  const chunkData = await file.arrayBuffer();
 
-  const chunkContent = await file.text();
+  // Store chunk in R2 (no TTL expiry, supports up to 5GB per object)
+  const paddedIndex = String(chunkIndex).padStart(6, '0');
+  const r2Key = `uploads/${sourceId}/chunk-${paddedIndex}`;
+  await c.env.ATTACHMENTS.put(r2Key, chunkData);
 
-  // Store chunk in KV
-  await c.env.CACHE.put(`upload:${sourceId}:${chunkIndex}`, chunkContent, { expirationTtl: 3600 });
-
-  console.log(`[UploadChunk] Chunk ${chunkIndex + 1} stored`);
+  console.log(`[UploadChunk] Chunk ${chunkIndex + 1} stored in R2 (${chunkData.byteLength} bytes)`);
 
   return c.json({
     success: true,
     chunkIndex,
     totalChunks,
-    chunkSize: chunkContent.length,
+    chunkSize: chunkData.byteLength,
   });
 });
 
 /**
  * POST /api/sources/:id/process
- * Start processing uploaded chunks
+ * Start processing uploaded chunks via queue
  */
 app.post('/api/sources/:id/process', async (c) => {
   console.log('[Process] Starting processing');
@@ -876,19 +937,36 @@ app.post('/api/sources/:id/process', async (c) => {
   const body = await c.req.json<{ totalChunks: number }>();
   const totalChunks = body.totalChunks || 1;
 
-  console.log(`[Process] Processing ${totalChunks} chunks for source ${sourceId}`);
+  console.log(`[Process] Enqueuing ${totalChunks} chunks for source ${sourceId}`);
 
   // Mark source as processing
   await updateSourceStatus(sourceId, 'processing', userId, c.env, { emails_total: 0 });
 
-  // Process in background
-  c.executionCtx.waitUntil(
-    processUploadedFile(sourceId, userId, totalChunks, c.env)
-  );
+  // Enqueue one process-chunk message per uploaded chunk
+  const queueBatch: { body: QueueMessage }[] = [];
+  for (let i = 0; i < totalChunks; i++) {
+    queueBatch.push({
+      body: {
+        type: 'process-chunk',
+        sourceId,
+        userId,
+        chunkIndex: i,
+        totalChunks,
+      },
+    });
+    // Queue supports up to 100 messages per sendBatch call
+    if (queueBatch.length >= 100) {
+      await c.env.EMAIL_QUEUE.sendBatch(queueBatch);
+      queueBatch.length = 0;
+    }
+  }
+  if (queueBatch.length > 0) {
+    await c.env.EMAIL_QUEUE.sendBatch(queueBatch);
+  }
 
   return c.json({
     success: true,
-    message: 'Processing started',
+    message: 'Processing enqueued',
     totalChunks,
   });
 });
@@ -896,27 +974,21 @@ app.post('/api/sources/:id/process', async (c) => {
 /**
  * POST /api/sources/:id/upload
  * Upload mbox file for server-side processing (for small files)
- * Returns immediately, processes in background
+ * Stores in R2 as a single chunk and enqueues for processing
  */
 app.post('/api/sources/:id/upload', async (c) => {
   console.log('[Upload] Received upload request');
   const userId = c.get('userId');
   const sourceId = c.req.param('id');
-  console.log('[Upload] Source ID:', sourceId, 'User ID:', userId);
 
   const source = await getSource(sourceId, userId, c.env);
   if (!source) {
-    console.log('[Upload] Source not found');
     return c.json({ error: 'Source not found' }, 404);
   }
-  console.log('[Upload] Source found:', source.name);
 
-  // Get file content
-  console.log('[Upload] Parsing form data...');
   let formData;
   try {
     formData = await c.req.formData();
-    console.log('[Upload] Form data parsed');
   } catch (e) {
     console.error('[Upload] Failed to parse form data:', e);
     return c.json({ error: 'Failed to parse form data: ' + (e instanceof Error ? e.message : 'Unknown error') }, 400);
@@ -924,149 +996,203 @@ app.post('/api/sources/:id/upload', async (c) => {
 
   const fileValue = formData.get('file') as unknown;
   const file = fileValue instanceof File ? fileValue : null;
-  console.log('[Upload] File from form:', file ? `${file.name} (${file.size} bytes)` : String(fileValue));
 
   if (!file) {
-    console.log('[Upload] No file in form data');
     return c.json({ error: 'No file provided' }, 400);
   }
 
-  console.log('[Upload] Reading file content...');
-  const fileContent = await file.text();
-  const fileSize = fileContent.length;
-  console.log('[Upload] File content read, size:', fileSize);
+  // Use arrayBuffer() for binary-safe storage
+  const fileData = await file.arrayBuffer();
+  const fileSize = fileData.byteLength;
 
-  // Store file in KV for processing (in chunks if large)
-  const chunkSize = 1024 * 1024; // 1MB chunks (KV limit is 25MB per value)
-  const totalChunks = Math.ceil(fileSize / chunkSize);
-  console.log('[Upload] Storing', totalChunks, 'chunks in KV...');
-
-  for (let i = 0; i < totalChunks; i++) {
-    const chunk = fileContent.slice(i * chunkSize, (i + 1) * chunkSize);
-    await c.env.CACHE.put(`upload:${sourceId}:${i}`, chunk, { expirationTtl: 3600 });
-  }
-  console.log('[Upload] Chunks stored');
-
-  // Store metadata
-  await c.env.CACHE.put(`upload:${sourceId}:meta`, JSON.stringify({
-    totalChunks,
-    fileSize,
-    fileName: file.name,
-    uploadedAt: new Date().toISOString(),
-  }), { expirationTtl: 3600 });
+  // Store as single chunk in R2
+  const r2Key = `uploads/${sourceId}/chunk-000000`;
+  await c.env.ATTACHMENTS.put(r2Key, fileData);
+  const totalChunks = 1;
 
   // Mark source as processing
   await updateSourceStatus(sourceId, 'processing', userId, c.env, { emails_total: 0 });
-  console.log('[Upload] Source marked as processing');
 
-  // Process in background using waitUntil
-  console.log('[Upload] Starting background processing...');
-  c.executionCtx.waitUntil(
-    processUploadedFile(sourceId, userId, totalChunks, c.env)
-  );
+  // Enqueue chunk for processing via queue
+  await c.env.EMAIL_QUEUE.sendBatch([{
+    body: {
+      type: 'process-chunk',
+      sourceId,
+      userId,
+      chunkIndex: 0,
+      totalChunks,
+    } satisfies QueueMessage,
+  }]);
 
-  console.log('[Upload] Returning success response');
+  console.log(`[Upload] Stored ${fileSize} bytes in R2, enqueued for processing`);
   return c.json({
     success: true,
-    message: 'Upload received, processing in background',
+    message: 'Upload received, processing enqueued',
     fileSize,
     totalChunks,
   });
 });
 
 /**
- * Process uploaded mbox file in background
+ * Process a single uploaded chunk from R2.
+ * Reads carryover from the previous chunk (stored in KV), parses emails,
+ * enqueues process-email messages, and stores any trailing partial email
+ * as carryover for the next chunk.
  */
-async function processUploadedFile(
+async function processChunk(
   sourceId: string,
   userId: string,
+  chunkIndex: number,
   totalChunks: number,
   env: Env
 ): Promise<void> {
-  try {
-    // Reassemble file from chunks
-    const chunks: string[] = [];
-    for (let i = 0; i < totalChunks; i++) {
-      const chunk = await env.CACHE.get(`upload:${sourceId}:${i}`);
-      if (chunk === null) {
-        throw new Error(`Missing upload chunk ${i + 1}/${totalChunks}`);
+  const paddedIndex = String(chunkIndex).padStart(6, '0');
+  const r2Key = `uploads/${sourceId}/chunk-${paddedIndex}`;
+
+  const r2Obj = await env.ATTACHMENTS.get(r2Key);
+  if (!r2Obj) {
+    throw new Error(`Missing upload chunk ${chunkIndex}/${totalChunks} at ${r2Key}`);
+  }
+
+  // Read chunk as text (mbox is text-based)
+  const chunkText = await r2Obj.text();
+
+  // Get carryover from previous chunk (if any)
+  const carryoverKey = `carryover:${sourceId}`;
+  const carryover = (await env.CACHE.get(carryoverKey)) || '';
+
+  const content = carryover + chunkText;
+  const isLastChunk = chunkIndex === totalChunks - 1;
+
+  // Find all "From " boundaries
+  const fromPattern = /^From /gm;
+  const matches: number[] = [];
+  let match;
+  while ((match = fromPattern.exec(content)) !== null) {
+    const lineEnd = content.indexOf('\n', match.index);
+    const line = content.substring(match.index, lineEnd === -1 ? undefined : lineEnd);
+    if (line.includes('@') || line.includes(' at ')) {
+      matches.push(match.index);
+    }
+  }
+
+  let emailCount = 0;
+  const MAX_QUEUE_BODY_SIZE = 200 * 1024; // 200KB safety margin for 256KB queue limit
+  const queueBatchSize = 25;
+  let queueBatch: { body: QueueMessage }[] = [];
+
+  const enqueueEmail = async (parsed: IngestEmailRequest) => {
+    const bodySize = new TextEncoder().encode(JSON.stringify(parsed)).byteLength;
+
+    if (bodySize > MAX_QUEUE_BODY_SIZE) {
+      // Store oversized email body in R2 and send a reference
+      const bodyR2Key = `uploads/${sourceId}/email-body-${crypto.randomUUID()}`;
+      await env.ATTACHMENTS.put(bodyR2Key, parsed.body_text);
+
+      queueBatch.push({
+        body: {
+          type: 'process-email-ref',
+          sourceId,
+          userId,
+          r2Key: bodyR2Key,
+          subject: parsed.subject,
+          message_id: parsed.message_id,
+          from_email: parsed.from_email,
+          from_name: parsed.from_name,
+          to: parsed.to,
+          cc: parsed.cc,
+          sent_at: parsed.sent_at,
+          in_reply_to: parsed.in_reply_to,
+          references: parsed.references,
+        },
+      });
+    } else {
+      queueBatch.push({
+        body: {
+          type: 'process-email',
+          sourceId,
+          userId,
+          email: parsed,
+        },
+      });
+    }
+
+    emailCount++;
+
+    if (queueBatch.length >= queueBatchSize) {
+      await env.EMAIL_QUEUE.sendBatch(queueBatch);
+      queueBatch = [];
+    }
+  };
+
+  if (matches.length === 0) {
+    // No boundaries - carry everything over (or discard if last chunk)
+    console.log(`[ProcessChunk] Chunk ${chunkIndex + 1}/${totalChunks} for source ${sourceId}: no "From " boundaries found (content length: ${content.length}, first 200 chars: ${JSON.stringify(content.substring(0, 200))})`);
+    if (!isLastChunk) {
+      await env.CACHE.put(carryoverKey, content, { expirationTtl: 7200 });
+    }
+  } else {
+    const lastMatchIndex = isLastChunk ? matches.length : matches.length - 1;
+
+    for (let i = 0; i < lastMatchIndex; i++) {
+      const start = matches[i];
+      const end = i + 1 < matches.length ? matches[i + 1] : content.length;
+      const emailRaw = content.substring(start, end);
+      const firstNewline = emailRaw.indexOf('\n');
+      if (firstNewline !== -1) {
+        const parsed = parseEmailContent(emailRaw.substring(firstNewline + 1));
+        if (parsed) await enqueueEmail(parsed);
       }
-      chunks.push(chunk);
-    }
-    const fileContent = chunks.join('');
-
-    // Parse mbox and process emails
-    const emails = parseMboxContent(fileContent);
-
-    // Update total count
-    await env.DB.prepare(
-      'UPDATE email_sources SET emails_total = ? WHERE id = ? AND user_id = ?'
-    ).bind(emails.length, sourceId, userId).run();
-
-    // Process in batches
-    const batchSize = 25;
-    let processed = 0;
-    let failed = 0;
-
-    for (let i = 0; i < emails.length; i += batchSize) {
-      const batch = emails.slice(i, i + batchSize);
-
-      const result = await ingestEmailsWithSource(batch, sourceId, userId, env);
-      processed += result.processed;
-      failed += result.failed;
-
-      // Update progress
-      await incrementProcessed(sourceId, result.processed, result.failed, userId, env);
     }
 
-    // Mark as completed
-    await updateSourceStatus(sourceId, 'completed', userId, env);
-
-    // Clean up stored chunks/metadata
-    for (let i = 0; i < totalChunks; i++) {
-      await env.CACHE.delete(`upload:${sourceId}:${i}`);
-    }
-    await env.CACHE.delete(`upload:${sourceId}:meta`);
-
-  } catch (e) {
-    console.error('Background processing failed:', e);
-    await updateSourceStatus(sourceId, 'failed', userId, env, {
-      error_message: e instanceof Error ? e.message : 'Processing failed',
-    });
-  }
-}
-
-/**
- * Parse mbox file content into email objects
- */
-function parseMboxContent(content: string): IngestEmailRequest[] {
-  const emails: IngestEmailRequest[] = [];
-  const lines = content.split(/\r?\n/);
-
-  let currentEmailLines: string[] = [];
-  let inEmail = false;
-
-  for (const line of lines) {
-    // MBOX format: each email starts with "From " followed by email and timestamp
-    if (line.startsWith('From ') && (line.includes('@') || line.includes(' at '))) {
-      if (currentEmailLines.length > 0) {
-        const parsed = parseEmailContent(currentEmailLines.join('\n'));
-        if (parsed) emails.push(parsed);
+    if (isLastChunk && matches.length > 0) {
+      // Process the very last email
+      const lastStart = matches[matches.length - 1];
+      const emailRaw = content.substring(lastStart);
+      const firstNewline = emailRaw.indexOf('\n');
+      if (firstNewline !== -1) {
+        const parsed = parseEmailContent(emailRaw.substring(firstNewline + 1));
+        if (parsed) await enqueueEmail(parsed);
       }
-      currentEmailLines = [];
-      inEmail = true;
-    } else if (inEmail) {
-      currentEmailLines.push(line);
+    }
+
+    if (!isLastChunk) {
+      // Carry over content from the last "From " boundary
+      await env.CACHE.put(carryoverKey, content.substring(matches[matches.length - 1]), { expirationTtl: 7200 });
     }
   }
 
-  // Don't forget the last email
-  if (currentEmailLines.length > 0) {
-    const parsed = parseEmailContent(currentEmailLines.join('\n'));
-    if (parsed) emails.push(parsed);
+  // Flush remaining queue batch
+  if (queueBatch.length > 0) {
+    await env.EMAIL_QUEUE.sendBatch(queueBatch);
   }
 
-  return emails;
+  // Atomically increment emails_total
+  await env.DB.prepare(
+    'UPDATE email_sources SET emails_total = emails_total + ? WHERE id = ? AND user_id = ?'
+  ).bind(emailCount, sourceId, userId).run();
+
+  // Clean up: delete chunk from R2
+  await env.ATTACHMENTS.delete(r2Key);
+
+  // Clean up carryover and metadata on last chunk
+  if (isLastChunk) {
+    await env.CACHE.delete(carryoverKey);
+
+    // Check if any emails were found across all chunks
+    const source = await env.DB.prepare(
+      'SELECT emails_total FROM email_sources WHERE id = ? AND user_id = ?'
+    ).bind(sourceId, userId).first<{ emails_total: number }>();
+
+    if (source && source.emails_total === 0) {
+      await env.DB.prepare(
+        `UPDATE email_sources SET status = 'failed', error_message = 'No emails found in file. Check the file is a valid mbox (Gmail Takeout) export.', completed_at = datetime('now') WHERE id = ? AND user_id = ?`
+      ).bind(sourceId, userId).run();
+      console.log(`[ProcessChunk] Source ${sourceId}: no emails found in any chunk, marked as failed`);
+    }
+  }
+
+  console.log(`[ProcessChunk] Chunk ${chunkIndex + 1}/${totalChunks} for source ${sourceId}: found ${matches.length} boundaries, enqueued ${emailCount} emails`);
 }
 
 /**
@@ -1224,5 +1350,113 @@ function decodeQuotedPrintableContent(text: string): string {
     .replace(/=([0-9A-F]{2})/gi, (match, hex) => String.fromCharCode(parseInt(hex, 16)));
 }
 
-// Export for Cloudflare Workers
-export default app;
+// Export for Cloudflare Workers with queue consumer
+export default {
+  fetch: app.fetch,
+
+  async queue(batch: MessageBatch<QueueMessage>, env: Env): Promise<void> {
+    console.log(`[QueueConsumer] Processing batch of ${batch.messages.length} messages`);
+
+    // Separate message types
+    const chunkMessages: Message<Extract<QueueMessage, { type: 'process-chunk' }>>[] = [];
+    const emailMessages: Message<QueueMessage>[] = [];
+
+    for (const msg of batch.messages) {
+      if (msg.body.type === 'process-chunk') {
+        chunkMessages.push(msg as any);
+      } else {
+        emailMessages.push(msg);
+      }
+    }
+
+    // Process chunk messages (parse mbox chunks into emails)
+    for (const msg of chunkMessages) {
+      try {
+        await processChunk(
+          msg.body.sourceId,
+          msg.body.userId,
+          msg.body.chunkIndex,
+          msg.body.totalChunks,
+          env
+        );
+        msg.ack();
+      } catch (e) {
+        console.error(`[QueueConsumer] Chunk processing failed:`, e);
+        msg.retry();
+      }
+    }
+
+    // Process email messages: group by sourceId for efficient progress updates
+    if (emailMessages.length > 0) {
+      const bySource = new Map<string, { userId: string; emails: IngestEmailRequest[] }>();
+
+      for (const msg of emailMessages) {
+        const body = msg.body;
+        let email: IngestEmailRequest;
+
+        if (body.type === 'process-email') {
+          email = body.email;
+        } else if (body.type === 'process-email-ref') {
+          // Fetch oversized body from R2
+          const r2Obj = await env.ATTACHMENTS.get(body.r2Key);
+          const bodyText = r2Obj ? await r2Obj.text() : '';
+          // Clean up the R2 object
+          await env.ATTACHMENTS.delete(body.r2Key);
+
+          email = {
+            message_id: body.message_id,
+            subject: body.subject,
+            body_text: bodyText,
+            from_email: body.from_email,
+            from_name: body.from_name,
+            to: body.to,
+            cc: body.cc,
+            sent_at: body.sent_at,
+            in_reply_to: body.in_reply_to,
+            references: body.references,
+          };
+        } else {
+          msg.ack();
+          continue;
+        }
+
+        const key = body.sourceId;
+        if (!bySource.has(key)) {
+          bySource.set(key, { userId: body.userId, emails: [] });
+        }
+        bySource.get(key)!.emails.push(email);
+      }
+
+      await Promise.all(
+        Array.from(bySource.entries()).map(async ([sourceId, { userId, emails }]) => {
+          try {
+            const result = await ingestEmailsParallel(emails, sourceId, userId, env);
+            await incrementProcessed(sourceId, result.processed, result.failed, userId, env);
+
+            // Atomic completion check: only mark completed if the UPDATE actually changes a row
+            const completionResult = await env.DB.prepare(`
+              UPDATE email_sources
+              SET status = 'completed', completed_at = datetime('now')
+              WHERE id = ? AND user_id = ? AND status = 'processing'
+                AND emails_total > 0
+                AND emails_processed + emails_failed >= emails_total
+            `).bind(sourceId, userId).run();
+
+            if (completionResult.meta.changes > 0) {
+              console.log(`[QueueConsumer] Source ${sourceId} completed`);
+            }
+          } catch (e) {
+            console.error(`[QueueConsumer] Error processing source ${sourceId}:`, e);
+          }
+        })
+      );
+
+      // Ack all email messages
+      for (const msg of emailMessages) {
+        msg.ack();
+      }
+    }
+
+    console.log(`[QueueConsumer] Batch processed successfully`);
+  },
+};

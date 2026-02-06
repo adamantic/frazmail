@@ -152,13 +152,72 @@ export async function toggleSourceInSearch(
 }
 
 /**
- * Delete a source and all its emails
+ * Delete a source and all its related data (full cascade)
  */
 export async function deleteSource(id: string, userId: string, env: Env): Promise<void> {
-  // Delete emails first (cascade would be better but D1 has limitations)
+  // Get all email IDs for this source
+  const emailRows = await env.DB.prepare(
+    'SELECT id FROM emails WHERE source_id = ? AND user_id = ?'
+  ).bind(id, userId).all<{ id: string }>();
+
+  const emailIds = (emailRows.results || []).map(r => r.id);
+
+  if (emailIds.length > 0) {
+    // Process in chunks to stay within query limits
+    const chunkSize = 50;
+    for (let i = 0; i < emailIds.length; i += chunkSize) {
+      const chunk = emailIds.slice(i, i + chunkSize);
+      const placeholders = chunk.map(() => '?').join(',');
+
+      // Delete email_recipients for these emails
+      await env.DB.prepare(
+        `DELETE FROM email_recipients WHERE email_id IN (${placeholders})`
+      ).bind(...chunk).run();
+
+      // Get and delete attachments (DB records + R2 objects)
+      const attachments = await env.DB.prepare(
+        `SELECT id, r2_key FROM attachments WHERE email_id IN (${placeholders})`
+      ).bind(...chunk).all<{ id: string; r2_key: string }>();
+
+      if (attachments.results?.length) {
+        // Delete R2 objects
+        for (const att of attachments.results) {
+          try {
+            await env.ATTACHMENTS.delete(att.r2_key);
+          } catch (e) {
+            console.error(`Failed to delete R2 object ${att.r2_key}:`, e);
+          }
+        }
+        // Delete attachment DB records
+        await env.DB.prepare(
+          `DELETE FROM attachments WHERE email_id IN (${placeholders})`
+        ).bind(...chunk).run();
+      }
+
+      // Delete vector embeddings
+      if (env.VECTORIZE?.deleteByIds) {
+        try {
+          await env.VECTORIZE.deleteByIds(chunk);
+        } catch (e) {
+          console.error('Failed to delete vector embeddings:', e);
+        }
+      }
+    }
+  }
+
+  // Delete emails
   await env.DB.prepare(
     'DELETE FROM emails WHERE source_id = ? AND user_id = ?'
   ).bind(id, userId).run();
+
+  // Delete any remaining upload chunks from R2
+  const uploadPrefix = `uploads/${id}/`;
+  const listed = await env.ATTACHMENTS.list({ prefix: uploadPrefix });
+  for (const obj of listed.objects) {
+    await env.ATTACHMENTS.delete(obj.key);
+  }
+
+  // Delete source record
   await env.DB.prepare(
     'DELETE FROM email_sources WHERE id = ? AND user_id = ?'
   ).bind(id, userId).run();
