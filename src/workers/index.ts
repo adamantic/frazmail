@@ -1129,6 +1129,7 @@ async function processChunk(
   } else {
     const lastMatchIndex = isLastChunk ? matches.length : matches.length - 1;
 
+    let parseFailures = 0;
     for (let i = 0; i < lastMatchIndex; i++) {
       const start = matches[i];
       const end = i + 1 < matches.length ? matches[i + 1] : content.length;
@@ -1136,8 +1137,19 @@ async function processChunk(
       const firstNewline = emailRaw.indexOf('\n');
       if (firstNewline !== -1) {
         const parsed = parseEmailContent(emailRaw.substring(firstNewline + 1));
-        if (parsed) await enqueueEmail(parsed);
+        if (parsed) {
+          await enqueueEmail(parsed);
+        } else {
+          parseFailures++;
+          if (parseFailures <= 3) {
+            const snippet = emailRaw.substring(firstNewline + 1, firstNewline + 300);
+            console.log(`[ProcessChunk] Parse returned null for email ${i + 1}, snippet: ${JSON.stringify(snippet)}`);
+          }
+        }
       }
+    }
+    if (parseFailures > 0) {
+      console.log(`[ProcessChunk] Chunk ${chunkIndex + 1}/${totalChunks}: ${parseFailures}/${lastMatchIndex} emails failed to parse`);
     }
 
     if (isLastChunk && matches.length > 0) {
@@ -1208,11 +1220,14 @@ async function processChunk(
  */
 function parseEmailContent(raw: string): IngestEmailRequest | null {
   try {
-    const headerEndIndex = raw.indexOf('\n\n');
+    // Normalize CRLF to LF (Gmail Takeout exports use CRLF)
+    const normalized = raw.replace(/\r\n/g, '\n');
+
+    const headerEndIndex = normalized.indexOf('\n\n');
     if (headerEndIndex === -1) return null;
 
-    const headerSection = raw.substring(0, headerEndIndex);
-    const bodySection = raw.substring(headerEndIndex + 2);
+    const headerSection = normalized.substring(0, headerEndIndex);
+    const bodySection = normalized.substring(headerEndIndex + 2);
 
     const headers = parseEmailHeaders(headerSection);
 
@@ -1252,7 +1267,7 @@ function parseEmailContent(raw: string): IngestEmailRequest | null {
         const boundary = boundaryMatch[1];
         const parts = bodySection.split('--' + boundary);
         for (const part of parts) {
-          if (part.includes('Content-Type: text/plain') || part.includes('content-type: text/plain')) {
+          if (part.toLowerCase().includes('content-type: text/plain')) {
             const partHeaderEnd = part.indexOf('\n\n');
             if (partHeaderEnd !== -1) {
               bodyText = part.substring(partHeaderEnd + 2).trim();
