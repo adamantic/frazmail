@@ -1,8 +1,11 @@
 import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
 import './globals.css';
 import { Providers } from '@/components/Providers';
 import { Navigation } from '@/components/Navigation';
 import { QMDemon } from '@/components/QMDemon';
+
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: 'QMDemon',
@@ -15,8 +18,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className="bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors">
+    <html lang="en" data-theme="dark" className={inter.className} suppressHydrationWarning>
+      <body className="bg-[var(--bg)] text-[var(--text-primary)] min-h-screen transition-colors">
         <Providers>
           <Navigation />
           <main>{children}</main>

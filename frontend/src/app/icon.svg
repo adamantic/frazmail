@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Glow -->
+  <ellipse cx="32" cy="58" rx="16" ry="6" fill="#6e8eff" opacity="0.2"/>
+  <!-- Body -->
+  <rect x="18" y="34" width="28" height="22" rx="10" fill="url(#bodyGrad)"/>
+  <!-- Head -->
+  <ellipse cx="32" cy="28" rx="18" ry="16" fill="url(#bodyGrad)"/>
+  <!-- Left Horn -->
+  <path d="M16 18 Q13 4 10 2 Q14 8 16 14" fill="#c2410c"/>
+  <!-- Right Horn -->
+  <path d="M48 18 Q51 4 54 2 Q50 8 48 14" fill="#c2410c"/>
+  <!-- Left Eye -->
+  <ellipse cx="24" cy="26" rx="5" ry="6" fill="white"/>
+  <ellipse cx="25" cy="27" rx="2.5" ry="3" fill="#0f172a"/>
+  <circle cx="24" cy="25.5" r="1" fill="white" opacity="0.8"/>
+  <!-- Right Eye -->
+  <ellipse cx="40" cy="26" rx="5" ry="6" fill="white"/>
+  <ellipse cx="41" cy="27" rx="2.5" ry="3" fill="#0f172a"/>
+  <circle cx="40" cy="25.5" r="1" fill="white" opacity="0.8"/>
+  <!-- Mouth -->
+  <ellipse cx="32" cy="36" rx="4" ry="2.5" fill="#9a3412"/>
+  <!-- Blush Left -->
+  <ellipse cx="18" cy="33" rx="4" ry="2" fill="#fb7185" opacity="0.5"/>
+  <!-- Blush Right -->
+  <ellipse cx="46" cy="33" rx="4" ry="2" fill="#fb7185" opacity="0.5"/>
+  <!-- Left Arm -->
+  <rect x="10" y="38" width="6" height="12" rx="3" fill="url(#bodyGrad)" transform="rotate(20 13 38)"/>
+  <!-- Right Arm -->
+  <rect x="48" y="38" width="6" height="12" rx="3" fill="url(#bodyGrad)" transform="rotate(-20 51 38)"/>
+  <!-- Left Leg -->
+  <rect x="22" y="52" width="8" height="10" rx="4" fill="url(#bodyGrad)"/>
+  <!-- Right Leg -->
+  <rect x="34" y="52" width="8" height="10" rx="4" fill="url(#bodyGrad)"/>
+  <!-- Tail -->
+  <path d="M48 48 Q56 44 58 38 L60 42 Q56 46 50 48" fill="#ea580c"/>
+  <polygon points="60,36 64,40 58,42" fill="#9a3412"/>
+  <defs>
+    <linearGradient id="bodyGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f97316"/>
+      <stop offset="50%" stop-color="#ea580c"/>
+      <stop offset="100%" stop-color="#c2410c"/>
+    </linearGradient>
+  </defs>
+</svg>

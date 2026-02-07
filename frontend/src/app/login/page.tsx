@@ -8,8 +8,8 @@ import { useAuth } from '@/lib/auth';
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary-600 border-t-transparent" />
+      <div className="min-h-screen flex items-center justify-center bg-[var(--bg)]">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-[var(--accent)] border-t-transparent" />
       </div>
     }>
       <LoginContent />
@@ -116,24 +116,29 @@ function LoginContent() {
 
   if (isLoading || googleLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-[var(--bg)]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary-600 border-t-transparent mx-auto" />
-          {googleLoading && <p className="mt-4 text-gray-600">Signing in with Google...</p>}
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-[var(--accent)] border-t-transparent mx-auto" />
+          {googleLoading && <p className="mt-4 text-[var(--text-secondary)]">Signing in with Google...</p>}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="max-w-md w-full">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--bg)] px-4 relative">
+      {/* Radial glow behind card */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="w-[600px] h-[600px] rounded-full bg-[var(--accent-glow)] blur-3xl opacity-50" />
+      </div>
+
+      <div className="max-w-md w-full relative z-10">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-primary-100 rounded-full mb-4">
-            <Mail className="h-8 w-8 text-primary-600" />
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-[var(--accent-dim)] rounded-full mb-4">
+            <Mail className="h-8 w-8 text-[var(--accent)]" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Email Intelligence</h1>
-          <p className="text-gray-600 mt-2">
+          <h1 className="text-2xl font-bold text-[var(--text-primary)]">Email Intelligence</h1>
+          <p className="text-[var(--text-secondary)] mt-2">
             {needsSetup
               ? 'Create your account to get started'
               : isRegisterMode
@@ -142,9 +147,9 @@ function LoginContent() {
           </p>
         </div>
 
-        <div className="bg-white p-8 rounded-lg border border-gray-200 shadow-sm">
+        <div className="bg-[var(--surface)] p-8 rounded-[14px] border border-[var(--border)]">
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+            <div className="mb-4 p-3 bg-[var(--danger)]/10 border border-[var(--danger)]/20 rounded-[14px] text-[var(--danger)] text-sm">
               {error}
             </div>
           )}
@@ -155,7 +160,7 @@ function LoginContent() {
               <button
                 type="button"
                 onClick={handleGoogleSignIn}
-                className="w-full flex items-center justify-center gap-3 py-2 px-4 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 font-medium text-gray-700 transition-colors"
+                className="w-full flex items-center justify-center gap-3 py-2 px-4 bg-[var(--surface)] border border-[var(--input-border)] rounded-[14px] hover:bg-[var(--surface-hover)] font-medium text-[var(--text-primary)] transition-colors"
               >
                 <svg className="h-5 w-5" viewBox="0 0 24 24">
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" />
@@ -168,10 +173,10 @@ function LoginContent() {
 
               <div className="relative my-6">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-300" />
+                  <div className="w-full border-t border-[var(--border)]" />
                 </div>
                 <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-white text-gray-500">or</span>
+                  <span className="px-2 bg-[var(--surface)] text-[var(--text-muted)]">or</span>
                 </div>
               </div>
             </>
@@ -181,17 +186,17 @@ function LoginContent() {
 
           {/* Email field */}
           <div className="mb-4">
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="email" className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
               Email
             </label>
             <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-[var(--text-muted)]" />
               <input
                 type="email"
                 id="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full pl-10 pr-4 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)]"
                 placeholder="you@example.com"
                 required
                 autoFocus
@@ -202,17 +207,17 @@ function LoginContent() {
           {/* Name field (only for registration) */}
           {isRegisterMode && (
             <div className="mb-4">
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-                Name <span className="text-gray-400">(optional)</span>
+              <label htmlFor="name" className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+                Name <span className="text-[var(--text-muted)]">(optional)</span>
               </label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-[var(--text-muted)]" />
                 <input
                   type="text"
                   id="name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full pl-10 pr-4 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)]"
                   placeholder="Your name"
                 />
               </div>
@@ -221,24 +226,24 @@ function LoginContent() {
 
           {/* Password field */}
           <div className="mb-4">
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="password" className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
               Password
             </label>
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-[var(--text-muted)]" />
               <input
                 type={showPassword ? 'text' : 'password'}
                 id="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full pl-10 pr-10 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)]"
                 placeholder="Enter password"
                 required
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
               >
                 {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>
@@ -248,17 +253,17 @@ function LoginContent() {
           {/* Confirm password (only for registration) */}
           {isRegisterMode && (
             <div className="mb-4">
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                 Confirm Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-[var(--text-muted)]" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   id="confirmPassword"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full pl-10 pr-10 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)]"
                   placeholder="Confirm password"
                   required
                 />
@@ -269,7 +274,7 @@ function LoginContent() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2 px-4 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+            className="w-full py-2 px-4 bg-[var(--accent)] text-white rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-opacity"
           >
             {loading ? (
               <span className="flex items-center justify-center gap-2">
@@ -292,7 +297,7 @@ function LoginContent() {
                   setIsRegisterMode(!isRegisterMode);
                   setError('');
                 }}
-                className="text-sm text-primary-600 hover:text-primary-700"
+                className="text-sm text-[var(--accent)] hover:opacity-80"
               >
                 {isRegisterMode
                   ? 'Already have an account? Sign in'
@@ -302,7 +307,7 @@ function LoginContent() {
           )}
 
           {isRegisterMode && (
-            <p className="text-xs text-gray-500 text-center mt-4">
+            <p className="text-xs text-[var(--text-muted)] text-center mt-4">
               Your data is stored securely and isolated from other users.
             </p>
           )}
