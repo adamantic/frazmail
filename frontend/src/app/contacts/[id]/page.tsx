@@ -70,11 +70,11 @@ export default function ContactDetailPage() {
     return (
       <div className="max-w-5xl mx-auto px-4 py-8">
         <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-1/3 mb-4"></div>
-          <div className="h-4 bg-gray-200 rounded w-1/2 mb-8"></div>
+          <div className="h-8 bg-[var(--surface)] rounded w-1/3 mb-4"></div>
+          <div className="h-4 bg-[var(--surface)] rounded w-1/2 mb-8"></div>
           <div className="space-y-4">
             {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-20 bg-gray-200 rounded"></div>
+              <div key={i} className="h-20 bg-[var(--surface)] rounded"></div>
             ))}
           </div>
         </div>
@@ -86,9 +86,9 @@ export default function ContactDetailPage() {
     return (
       <div className="max-w-5xl mx-auto px-4 py-8">
         <div className="text-center py-12">
-          <User className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Contact not found</h3>
-          <Link href="/contacts" className="text-primary-600 hover:text-primary-700">
+          <User className="h-12 w-12 text-[var(--text-muted)] mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-[var(--text-primary)] mb-2">Contact not found</h3>
+          <Link href="/contacts" className="text-[var(--accent)] hover:opacity-80">
             Back to contacts
           </Link>
         </div>
@@ -103,29 +103,29 @@ export default function ContactDetailPage() {
       {/* Back button */}
       <Link
         href="/contacts"
-        className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6"
+        className="inline-flex items-center gap-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] mb-6"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to contacts
       </Link>
 
       {/* Contact Header */}
-      <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
+      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[14px] p-6 mb-6">
         <div className="flex items-start gap-4">
-          <div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
-            <User className="h-8 w-8 text-primary-600" />
+          <div className="w-16 h-16 bg-[var(--accent-dim)] rounded-full flex items-center justify-center flex-shrink-0">
+            <User className="h-8 w-8 text-[var(--accent)]" />
           </div>
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl font-bold text-gray-900 truncate">
+            <h1 className="text-2xl font-bold text-[var(--text-primary)] truncate">
               {contact.name || contact.email}
             </h1>
             {contact.name && (
-              <p className="text-gray-500 truncate">{contact.email}</p>
+              <p className="text-[var(--text-secondary)] truncate">{contact.email}</p>
             )}
             {company && (
               <Link
                 href={`/companies/${company.id}`}
-                className="inline-flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 mt-1"
+                className="inline-flex items-center gap-1 text-sm text-[var(--accent)] hover:opacity-80 mt-1"
               >
                 <Building className="h-4 w-4" />
                 {company.name || company.domain}
@@ -135,34 +135,34 @@ export default function ContactDetailPage() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-6 border-t border-gray-100">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-6 border-t border-[var(--border)]">
           <div>
-            <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
+            <div className="flex items-center gap-2 text-[var(--text-secondary)] text-sm mb-1">
               <Mail className="h-4 w-4" />
               Total Emails
             </div>
-            <div className="text-2xl font-bold text-gray-900">{stats.total_emails}</div>
+            <div className="text-2xl font-bold text-[var(--text-primary)]">{stats.total_emails}</div>
           </div>
           <div>
-            <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
+            <div className="flex items-center gap-2 text-[var(--text-secondary)] text-sm mb-1">
               <Inbox className="h-4 w-4" />
               Received
             </div>
-            <div className="text-2xl font-bold text-green-600">{stats.received}</div>
+            <div className="text-2xl font-bold text-[var(--success)]">{stats.received}</div>
           </div>
           <div>
-            <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
+            <div className="flex items-center gap-2 text-[var(--text-secondary)] text-sm mb-1">
               <Send className="h-4 w-4" />
               Sent
             </div>
-            <div className="text-2xl font-bold text-blue-600">{stats.sent}</div>
+            <div className="text-2xl font-bold text-[var(--accent)]">{stats.sent}</div>
           </div>
           <div>
-            <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
+            <div className="flex items-center gap-2 text-[var(--text-secondary)] text-sm mb-1">
               <Calendar className="h-4 w-4" />
               First Contact
             </div>
-            <div className="text-lg font-semibold text-gray-900">
+            <div className="text-lg font-semibold text-[var(--text-primary)]">
               {stats.first_contact
                 ? format(parseISO(stats.first_contact), 'MMM d, yyyy')
                 : '-'}
@@ -175,19 +175,19 @@ export default function ContactDetailPage() {
       <div className="mb-6">
         <form onSubmit={handleSearch} className="flex gap-2">
           <div className="relative flex-1">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-[var(--text-muted)]" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={`Search emails with ${contact.name || contact.email}...`}
-              className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full pl-12 pr-4 py-3 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-[14px] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)]"
             />
           </div>
           <button
             type="submit"
             disabled={searching || !searchQuery.trim()}
-            className="px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
+            className="px-6 py-3 bg-[var(--accent)] text-white rounded-[14px] hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
             {searching ? 'Searching...' : 'Search'}
           </button>
@@ -195,29 +195,29 @@ export default function ContactDetailPage() {
             <button
               type="button"
               onClick={clearSearch}
-              className="px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+              className="px-4 py-3 border border-[var(--border)] text-[var(--text-secondary)] rounded-[14px] hover:bg-[var(--surface-hover)]"
             >
               Clear
             </button>
           )}
         </form>
         {searchResults && (
-          <p className="text-sm text-gray-500 mt-2">
+          <p className="text-sm text-[var(--text-secondary)] mt-2">
             Found {searchResults.length} results for &quot;{searchQuery}&quot;
           </p>
         )}
       </div>
 
       {/* Email List */}
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-          <h2 className="font-semibold text-gray-900">
+      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[14px] overflow-hidden">
+        <div className="px-4 py-3 border-b border-[var(--border)]">
+          <h2 className="font-semibold text-[var(--text-primary)]">
             {searchResults ? 'Search Results' : 'Email History'}
           </h2>
         </div>
-        <div className="divide-y divide-gray-200">
+        <div className="divide-y divide-[var(--border)]">
           {displayEmails.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
+            <div className="p-8 text-center text-[var(--text-secondary)]">
               {searchResults ? 'No emails match your search' : 'No emails found'}
             </div>
           ) : (
@@ -225,24 +225,24 @@ export default function ContactDetailPage() {
               <Link
                 key={email.id || email.email_id}
                 href={`/search?email=${email.id || email.email_id}`}
-                className="block p-4 hover:bg-gray-50 transition-colors"
+                className="block p-4 hover:bg-[var(--surface-hover)] transition-colors"
               >
                 <div className="flex items-start gap-3">
                   <div
                     className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${
-                      email.direction === 'received' ? 'bg-green-500' : 'bg-blue-500'
+                      email.direction === 'received' ? 'bg-[var(--success)]' : 'bg-[var(--accent)]'
                     }`}
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-medium text-gray-900 truncate">
+                      <h3 className="font-medium text-[var(--text-primary)] truncate">
                         {email.subject || '(No subject)'}
                       </h3>
                     </div>
-                    <p className="text-sm text-gray-500 line-clamp-2">
+                    <p className="text-sm text-[var(--text-secondary)] line-clamp-2">
                       {email.snippet}
                     </p>
-                    <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
+                    <div className="flex items-center gap-4 mt-2 text-xs text-[var(--text-muted)]">
                       <span className="flex items-center gap-1">
                         <Clock className="h-3 w-3" />
                         {format(parseISO(email.sent_at), 'MMM d, yyyy h:mm a')}
@@ -251,15 +251,15 @@ export default function ContactDetailPage() {
                         <span
                           className={`px-2 py-0.5 rounded-full text-xs ${
                             email.direction === 'received'
-                              ? 'bg-green-100 text-green-700'
-                              : 'bg-blue-100 text-blue-700'
+                              ? 'bg-[var(--success)]/10 text-[var(--success)]'
+                              : 'bg-[var(--accent-dim)] text-[var(--accent)]'
                           }`}
                         >
                           {email.direction === 'received' ? 'From them' : 'To them'}
                         </span>
                       )}
                       {email.score && (
-                        <span className="text-gray-400">
+                        <span className="text-[var(--text-muted)]">
                           Score: {email.score.toFixed(2)}
                         </span>
                       )}

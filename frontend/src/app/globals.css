@@ -1,46 +1,158 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Custom scrollbar */
+/* ===== Dark Theme (default) ===== */
+[data-theme="dark"] {
+  --bg: #07090f;
+  --surface: #0d1117;
+  --surface-hover: #131921;
+  --border: rgba(99, 130, 255, 0.08);
+  --border-hover: rgba(99, 130, 255, 0.18);
+  --text-primary: #e6edf3;
+  --text-secondary: #8b949e;
+  --text-muted: #555d68;
+  --accent: #6e8eff;
+  --accent-dim: rgba(110, 142, 255, 0.08);
+  --accent-glow: rgba(110, 142, 255, 0.12);
+  --input-bg: #0d1117;
+  --input-border: rgba(99, 130, 255, 0.12);
+  --success: #3fb950;
+  --warning: #d29922;
+  --danger: #f85149;
+}
+
+/* ===== Light Theme ===== */
+[data-theme="light"] {
+  --bg: #f8f9fc;
+  --surface: #ffffff;
+  --surface-hover: #f4f6fb;
+  --border: rgba(0, 0, 0, 0.06);
+  --border-hover: rgba(80, 110, 230, 0.2);
+  --text-primary: #1a1d26;
+  --text-secondary: #5c6370;
+  --text-muted: #9ca3af;
+  --accent: #4f6ce5;
+  --accent-dim: rgba(79, 108, 229, 0.06);
+  --accent-glow: rgba(79, 108, 229, 0.08);
+  --input-bg: #ffffff;
+  --input-border: rgba(0, 0, 0, 0.1);
+  --success: #1a7f37;
+  --warning: #9a6700;
+  --danger: #cf222e;
+}
+
+/* ===== Scrollbar ===== */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
-::-webkit-scrollbar-track {
+[data-theme="dark"] ::-webkit-scrollbar-track,
+[data-theme="dark"]::-webkit-scrollbar-track {
+  background: #0d1117;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb,
+[data-theme="dark"]::-webkit-scrollbar-thumb {
+  background: #21262d;
+  border-radius: 4px;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover,
+[data-theme="dark"]::-webkit-scrollbar-thumb:hover {
+  background: #30363d;
+}
+
+[data-theme="light"] ::-webkit-scrollbar-track,
+[data-theme="light"]::-webkit-scrollbar-track {
   background: #f1f1f1;
 }
 
-::-webkit-scrollbar-thumb {
+[data-theme="light"] ::-webkit-scrollbar-thumb,
+[data-theme="light"]::-webkit-scrollbar-thumb {
   background: #c1c1c1;
   border-radius: 4px;
 }
 
-::-webkit-scrollbar-thumb:hover {
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover,
+[data-theme="light"]::-webkit-scrollbar-thumb:hover {
   background: #a1a1a1;
 }
 
-/* Highlight marks in search results */
-mark {
+/* ===== Highlight marks ===== */
+[data-theme="dark"] mark {
+  background-color: rgba(110, 142, 255, 0.25);
+  color: #e6edf3;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+[data-theme="light"] mark {
   background-color: #fef08a;
   padding: 0 2px;
   border-radius: 2px;
 }
 
-/* Email body styling */
+/* ===== Email body styling ===== */
 .email-body {
   line-height: 1.6;
+  color: var(--text-primary);
 }
 
 .email-body a {
-  color: #0284c7;
+  color: var(--accent);
   text-decoration: underline;
 }
 
 .email-body blockquote {
-  border-left: 3px solid #e5e7eb;
+  border-left: 3px solid var(--border);
   padding-left: 1rem;
   margin-left: 0;
-  color: #6b7280;
+  color: var(--text-secondary);
+}
+
+/* ===== Utility: Card ===== */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.card:hover {
+  border-color: var(--border-hover);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1), 0 0 0 1px var(--border-hover);
+  transform: translateY(-1px);
+}
+
+/* ===== Utility: Glow on hover ===== */
+.glow {
+  position: relative;
+  overflow: hidden;
+}
+
+.glow::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+    var(--accent-glow),
+    transparent 40%
+  );
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.glow:hover::before {
+  opacity: 1;
 }

@@ -448,14 +448,12 @@
 
 /* ============ DARK MODE ============ */
 
-:root.dark .demon-glow,
-.dark .demon-glow {
-  background: radial-gradient(ellipse, rgba(249, 115, 22, 0.5) 0%, transparent 70%);
+[data-theme="dark"] .demon-glow {
+  background: radial-gradient(ellipse, rgba(110, 142, 255, 0.35) 0%, transparent 70%);
 }
 
-:root.dark .qm-demon,
-.dark .qm-demon {
-  filter: drop-shadow(0 4px 8px rgba(249, 115, 22, 0.3)) drop-shadow(0 0 20px rgba(249, 115, 22, 0.2));
+[data-theme="dark"] .qm-demon {
+  filter: drop-shadow(0 4px 8px rgba(110, 142, 255, 0.2)) drop-shadow(0 0 20px rgba(110, 142, 255, 0.15));
 }
 
 /* ============ REDUCED MOTION ============ */

@@ -17,21 +17,21 @@ const navItems = [
 export function Navigation() {
   const pathname = usePathname();
   const { isAuthenticated, logout, isLoading } = useAuth();
-  const [isDark, setIsDark] = useState(false);
+  const [isDark, setIsDark] = useState(true);
 
   useEffect(() => {
     const stored = localStorage.getItem('theme');
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const shouldBeDark = stored === 'dark' || (!stored && prefersDark);
+    const shouldBeDark = stored === 'dark' || (!stored && prefersDark) || (!stored && !prefersDark && true);
     setIsDark(shouldBeDark);
-    document.documentElement.classList.toggle('dark', shouldBeDark);
+    document.documentElement.setAttribute('data-theme', shouldBeDark ? 'dark' : 'light');
   }, []);
 
   const toggleDark = () => {
     const newValue = !isDark;
     setIsDark(newValue);
     localStorage.setItem('theme', newValue ? 'dark' : 'light');
-    document.documentElement.classList.toggle('dark', newValue);
+    document.documentElement.setAttribute('data-theme', newValue ? 'dark' : 'light');
   };
 
   // Don't show nav on login page or when loading
@@ -45,22 +45,22 @@ export function Navigation() {
   }
 
   return (
-    <nav className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+    <nav className="bg-[var(--surface)] border-b border-[var(--border)]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center">
             <Link href="/" className="flex items-center">
-              <span className="text-xl font-bold text-red-500">QMDemon</span>
+              <span className="text-xl font-bold text-[var(--accent)]">QMDemon</span>
             </Link>
-            <div className="hidden sm:ml-8 sm:flex sm:space-x-4">
+            <div className="hidden sm:ml-8 sm:flex sm:space-x-1">
               {navItems.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
                   className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
                     pathname === item.href
-                      ? 'text-primary-600 bg-primary-50 dark:text-primary-400 dark:bg-primary-900/20'
-                      : 'text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-800'
+                      ? 'text-[var(--accent)] bg-[var(--accent-dim)]'
+                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]'
                   }`}
                 >
                   {item.label}
@@ -71,14 +71,14 @@ export function Navigation() {
           <div className="flex items-center gap-2">
             <button
               onClick={toggleDark}
-              className="p-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
+              className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)] rounded-md transition-colors"
               title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
             >
               {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </button>
             <button
               onClick={logout}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md transition-colors"
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)] rounded-md transition-colors"
             >
               <LogOut className="h-4 w-4" />
               Sign out

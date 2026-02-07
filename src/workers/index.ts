@@ -937,32 +937,23 @@ app.post('/api/sources/:id/process', async (c) => {
   const body = await c.req.json<{ totalChunks: number }>();
   const totalChunks = body.totalChunks || 1;
 
-  console.log(`[Process] Enqueuing ${totalChunks} chunks for source ${sourceId}`);
+  console.log(`[Process] Enqueuing chunk 0/${totalChunks} for source ${sourceId} (chunks processed sequentially via chaining)`);
 
   // Mark source as processing
   await updateSourceStatus(sourceId, 'processing', userId, c.env, { emails_total: 0 });
 
-  // Enqueue one process-chunk message per uploaded chunk
-  const queueBatch: { body: QueueMessage }[] = [];
-  for (let i = 0; i < totalChunks; i++) {
-    queueBatch.push({
-      body: {
-        type: 'process-chunk',
-        sourceId,
-        userId,
-        chunkIndex: i,
-        totalChunks,
-      },
-    });
-    // Queue supports up to 100 messages per sendBatch call
-    if (queueBatch.length >= 100) {
-      await c.env.EMAIL_QUEUE.sendBatch(queueBatch);
-      queueBatch.length = 0;
-    }
-  }
-  if (queueBatch.length > 0) {
-    await c.env.EMAIL_QUEUE.sendBatch(queueBatch);
-  }
+  // Only enqueue the first chunk — each chunk will enqueue the next one
+  // after it finishes, ensuring sequential processing required by the
+  // carryover mechanism (mbox emails can span chunk boundaries).
+  await c.env.EMAIL_QUEUE.sendBatch([{
+    body: {
+      type: 'process-chunk',
+      sourceId,
+      userId,
+      chunkIndex: 0,
+      totalChunks,
+    },
+  }]);
 
   return c.json({
     success: true,
@@ -1175,7 +1166,7 @@ async function processChunk(
   // Clean up: delete chunk from R2
   await env.ATTACHMENTS.delete(r2Key);
 
-  // Clean up carryover and metadata on last chunk
+  // Chain: enqueue the next chunk, or finalize on the last chunk
   if (isLastChunk) {
     await env.CACHE.delete(carryoverKey);
 
@@ -1190,6 +1181,18 @@ async function processChunk(
       ).bind(sourceId, userId).run();
       console.log(`[ProcessChunk] Source ${sourceId}: no emails found in any chunk, marked as failed`);
     }
+  } else {
+    // Enqueue the next chunk to ensure sequential processing
+    // (carryover mechanism requires chunks to be processed in order)
+    await env.EMAIL_QUEUE.sendBatch([{
+      body: {
+        type: 'process-chunk',
+        sourceId,
+        userId,
+        chunkIndex: chunkIndex + 1,
+        totalChunks,
+      },
+    }]);
   }
 
   console.log(`[ProcessChunk] Chunk ${chunkIndex + 1}/${totalChunks} for source ${sourceId}: found ${matches.length} boundaries, enqueued ${emailCount} emails`);

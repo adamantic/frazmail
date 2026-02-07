@@ -253,14 +253,14 @@ export default function ImportPage() {
       {/* Header */}
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Import Emails</h1>
-          <p className="text-gray-600">
+          <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-2">Import Emails</h1>
+          <p className="text-[var(--text-secondary)]">
             Import email archives from Gmail or Outlook. Toggle sources on/off to control search scope.
           </p>
         </div>
         <button
           onClick={() => setShowUpload(true)}
-          className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center gap-2"
+          className="px-4 py-2 bg-[var(--accent)] text-white rounded-lg hover:opacity-90 flex items-center gap-2 transition-opacity"
         >
           <Upload className="h-4 w-4" />
           Import File
@@ -272,22 +272,22 @@ export default function ImportPage() {
         <StatCard
           label="Total Sources"
           value={sources.length.toString()}
-          icon={<FileText className="h-5 w-5 text-blue-600" />}
+          icon={<FileText className="h-5 w-5 text-[var(--accent)]" />}
         />
         <StatCard
           label="Active Sources"
           value={sources.filter(s => s.is_included_in_search).length.toString()}
-          icon={<Eye className="h-5 w-5 text-green-600" />}
+          icon={<Eye className="h-5 w-5 text-[var(--success)]" />}
         />
         <StatCard
           label="Total Emails"
           value={sources.reduce((acc, s) => acc + s.emails_processed, 0).toLocaleString()}
-          icon={<Mail className="h-5 w-5 text-purple-600" />}
+          icon={<Mail className="h-5 w-5 text-[var(--accent)]" />}
         />
         <StatCard
           label="Processing"
           value={sources.filter(s => s.status === 'processing').length.toString()}
-          icon={<RefreshCw className="h-5 w-5 text-orange-600" />}
+          icon={<RefreshCw className="h-5 w-5 text-[var(--warning)]" />}
         />
       </div>
 
@@ -301,7 +301,7 @@ export default function ImportPage() {
 
       {/* Sources List */}
       {loading ? (
-        <div className="text-center py-12 text-gray-500">Loading sources...</div>
+        <div className="text-center py-12 text-[var(--text-secondary)]">Loading sources...</div>
       ) : sources.length === 0 && uploadProgress.status === 'idle' ? (
         <EmptyState onAddNew={() => setShowUpload(true)} />
       ) : (
@@ -330,11 +330,11 @@ export default function ImportPage() {
 
 function StatCard({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4 flex items-center gap-4">
-      <div className="p-2 bg-gray-50 rounded-lg">{icon}</div>
+    <div className="bg-[var(--surface)] rounded-[14px] border border-[var(--border)] p-4 flex items-center gap-4">
+      <div className="p-2 bg-[var(--accent-dim)] rounded-lg">{icon}</div>
       <div>
-        <div className="text-sm text-gray-500">{label}</div>
-        <div className="text-2xl font-bold text-gray-900">{value}</div>
+        <div className="text-sm text-[var(--text-secondary)]">{label}</div>
+        <div className="text-2xl font-bold text-[var(--text-primary)]">{value}</div>
       </div>
     </div>
   );
@@ -361,26 +361,26 @@ function UploadProgressCard({
   const emailPercentage = progress.total ? Math.round((progress.processed || 0) / progress.total * 100) : 0;
 
   return (
-    <div className={`mb-6 p-4 rounded-lg border ${
-      progress.status === 'error' ? 'bg-red-50 border-red-200' :
-      progress.status === 'complete' ? 'bg-green-50 border-green-200' :
-      'bg-blue-50 border-blue-200'
+    <div className={`mb-6 p-4 rounded-[14px] border ${
+      progress.status === 'error' ? 'bg-[var(--danger)]/10 border-[var(--danger)]/20' :
+      progress.status === 'complete' ? 'bg-[var(--success)]/10 border-[var(--success)]/20' :
+      'bg-[var(--accent-dim)] border-[var(--accent)]/20'
     }`}>
       <div className="flex items-start justify-between">
         <div className="flex items-start gap-3">
-          {progress.status === 'parsing' && <RefreshCw className="h-5 w-5 text-blue-600 animate-spin mt-0.5" />}
-          {progress.status === 'uploading' && <RefreshCw className="h-5 w-5 text-blue-600 animate-spin mt-0.5" />}
-          {progress.status === 'complete' && <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />}
-          {progress.status === 'error' && <XCircle className="h-5 w-5 text-red-600 mt-0.5" />}
+          {progress.status === 'parsing' && <RefreshCw className="h-5 w-5 text-[var(--accent)] animate-spin mt-0.5" />}
+          {progress.status === 'uploading' && <RefreshCw className="h-5 w-5 text-[var(--accent)] animate-spin mt-0.5" />}
+          {progress.status === 'complete' && <CheckCircle className="h-5 w-5 text-[var(--success)] mt-0.5" />}
+          {progress.status === 'error' && <XCircle className="h-5 w-5 text-[var(--danger)] mt-0.5" />}
           <div>
-            <div className="font-medium text-gray-900">
+            <div className="font-medium text-[var(--text-primary)]">
               {progress.status === 'parsing' && `Parsing ${progress.fileName}...`}
               {progress.status === 'uploading' && `Importing ${progress.fileName}...`}
               {progress.status === 'complete' && `Import complete!`}
               {progress.status === 'error' && `Import failed`}
             </div>
             {progress.status === 'uploading' && progress.chunksTotal && (
-              <div className="text-sm text-gray-600 mt-1">
+              <div className="text-sm text-[var(--text-secondary)] mt-1">
                 <span className="font-medium">Reading file:</span> {progress.chunksProcessed} / {progress.chunksTotal} chunks ({chunkPercentage}%)
                 {(progress.total ?? 0) > 0 && (
                   <span className="ml-3">
@@ -390,25 +390,25 @@ function UploadProgressCard({
               </div>
             )}
             {progress.status === 'complete' && (
-              <div className="text-sm text-green-700 mt-1">
+              <div className="text-sm text-[var(--success)] mt-1">
                 Successfully imported {progress.processed?.toLocaleString()} emails from {progress.fileName}
               </div>
             )}
             {progress.status === 'error' && (
-              <div className="text-sm text-red-700 mt-1 whitespace-pre-wrap">{progress.error}</div>
+              <div className="text-sm text-[var(--danger)] mt-1 whitespace-pre-wrap">{progress.error}</div>
             )}
           </div>
         </div>
         {(progress.status === 'complete' || progress.status === 'error') && (
-          <button onClick={onClose} className="p-1 hover:bg-white/50 rounded">
-            <X className="h-4 w-4" />
+          <button onClick={onClose} className="p-1 hover:bg-[var(--surface-hover)] rounded">
+            <X className="h-4 w-4 text-[var(--text-secondary)]" />
           </button>
         )}
       </div>
       {progress.status === 'uploading' && progress.chunksTotal && (
-        <div className="mt-3 h-2 bg-white rounded-full overflow-hidden">
+        <div className="mt-3 h-2 bg-[var(--surface)] rounded-full overflow-hidden">
           <div
-            className="h-full bg-blue-500 transition-all duration-300"
+            className="h-full bg-[var(--accent)] transition-all duration-300"
             style={{ width: `${chunkPercentage}%` }}
           />
         </div>
@@ -419,45 +419,45 @@ function UploadProgressCard({
 
 function EmptyState({ onAddNew }: { onAddNew: () => void }) {
   return (
-    <div className="text-center py-16 bg-white rounded-lg border border-gray-200">
-      <Upload className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-      <h3 className="text-lg font-medium text-gray-900 mb-2">No email sources yet</h3>
-      <p className="text-gray-600 mb-6 max-w-md mx-auto">
+    <div className="text-center py-16 bg-[var(--surface)] rounded-[14px] border border-[var(--border)]">
+      <Upload className="h-12 w-12 text-[var(--text-muted)] mx-auto mb-4" />
+      <h3 className="text-lg font-medium text-[var(--text-primary)] mb-2">No email sources yet</h3>
+      <p className="text-[var(--text-secondary)] mb-6 max-w-md mx-auto">
         Import your email archives from Gmail (MBOX) or Outlook (PST) to start searching.
       </p>
       <button
         onClick={onAddNew}
-        className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+        className="px-6 py-2 bg-[var(--accent)] text-white rounded-lg hover:opacity-90 transition-opacity"
       >
         Import Your First File
       </button>
 
-      <div className="mt-8 pt-8 border-t border-gray-100 max-w-2xl mx-auto">
-        <h4 className="text-sm font-medium text-gray-700 mb-4">How to export your emails:</h4>
+      <div className="mt-8 pt-8 border-t border-[var(--border)] max-w-2xl mx-auto">
+        <h4 className="text-sm font-medium text-[var(--text-secondary)] mb-4">How to export your emails:</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
-          <div className="p-4 bg-gray-50 rounded-lg">
-            <div className="font-medium text-gray-900 mb-2 flex items-center gap-2">
-              <span className="text-red-500">Gmail</span>
-              <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Drag & Drop</span>
+          <div className="p-4 bg-[var(--surface-hover)] rounded-lg">
+            <div className="font-medium text-[var(--text-primary)] mb-2 flex items-center gap-2">
+              <span className="text-[var(--danger)]">Gmail</span>
+              <span className="text-xs bg-[var(--success)]/10 text-[var(--success)] px-2 py-0.5 rounded">Drag & Drop</span>
             </div>
-            <ol className="text-sm text-gray-600 space-y-1 list-decimal list-inside">
+            <ol className="text-sm text-[var(--text-secondary)] space-y-1 list-decimal list-inside">
               <li>Go to takeout.google.com</li>
-              <li>Deselect all, then select only "Mail"</li>
-              <li>Click "All Mail data included"</li>
+              <li>Deselect all, then select only &quot;Mail&quot;</li>
+              <li>Click &quot;All Mail data included&quot;</li>
               <li>Select MBOX format</li>
               <li>Export, download, and drag here</li>
             </ol>
           </div>
-          <div className="p-4 bg-gray-50 rounded-lg">
-            <div className="font-medium text-gray-900 mb-2 flex items-center gap-2">
-              <span className="text-blue-500">Outlook</span>
-              <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded">CLI Required</span>
+          <div className="p-4 bg-[var(--surface-hover)] rounded-lg">
+            <div className="font-medium text-[var(--text-primary)] mb-2 flex items-center gap-2">
+              <span className="text-[var(--accent)]">Outlook</span>
+              <span className="text-xs bg-[var(--warning)]/10 text-[var(--warning)] px-2 py-0.5 rounded">CLI Required</span>
             </div>
-            <ol className="text-sm text-gray-600 space-y-1 list-decimal list-inside">
+            <ol className="text-sm text-[var(--text-secondary)] space-y-1 list-decimal list-inside">
               <li>Open Outlook desktop app</li>
-              <li>File → Open & Export → Import/Export</li>
+              <li>File &rarr; Open & Export &rarr; Import/Export</li>
               <li>Export to Outlook Data File (.pst)</li>
-              <li>Run CLI: <code className="bg-gray-200 px-1 rounded text-xs">python3 scripts/ingest_pst.py file.pst</code></li>
+              <li>Run CLI: <code className="bg-[var(--accent-dim)] px-1 rounded text-xs">python3 scripts/ingest_pst.py file.pst</code></li>
             </ol>
           </div>
         </div>
@@ -476,10 +476,10 @@ function SourceCard({
   onDelete: () => void;
 }) {
   const statusColors = {
-    pending: 'bg-gray-100 text-gray-700',
-    processing: 'bg-yellow-100 text-yellow-700',
-    completed: 'bg-green-100 text-green-700',
-    failed: 'bg-red-100 text-red-700',
+    pending: 'bg-[var(--surface-hover)] text-[var(--text-secondary)]',
+    processing: 'bg-[var(--warning)]/10 text-[var(--warning)]',
+    completed: 'bg-[var(--success)]/10 text-[var(--success)]',
+    failed: 'bg-[var(--danger)]/10 text-[var(--danger)]',
   };
 
   const statusIcons = {
@@ -494,41 +494,33 @@ function SourceCard({
     : 0;
 
   return (
-    <div className={`bg-white rounded-lg border p-4 ${
-      source.is_included_in_search ? 'border-gray-200' : 'border-gray-100 opacity-60'
+    <div className={`bg-[var(--surface)] rounded-[14px] border p-4 ${
+      source.is_included_in_search ? 'border-[var(--border)]' : 'border-[var(--border)] opacity-60'
     }`}>
       <div className="flex items-start justify-between">
         <div className="flex items-start gap-4">
-          <div className={`p-2 rounded-lg ${
-            source.source_type === 'gmail' || source.source_type === 'mbox'
-              ? 'bg-red-50'
-              : 'bg-blue-50'
-          }`}>
-            <Mail className={`h-6 w-6 ${
-              source.source_type === 'gmail' || source.source_type === 'mbox'
-                ? 'text-red-600'
-                : 'text-blue-600'
-            }`} />
+          <div className="p-2 rounded-lg bg-[var(--accent-dim)]">
+            <Mail className="h-6 w-6 text-[var(--accent)]" />
           </div>
           <div>
-            <h3 className="font-medium text-gray-900">{source.name}</h3>
+            <h3 className="font-medium text-[var(--text-primary)]">{source.name}</h3>
             {source.email_address && (
-              <p className="text-sm text-gray-500">{source.email_address}</p>
+              <p className="text-sm text-[var(--text-secondary)]">{source.email_address}</p>
             )}
             <div className="flex items-center gap-3 mt-2">
               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${statusColors[source.status]}`}>
                 {statusIcons[source.status]}
                 {source.status}
               </span>
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-[var(--text-muted)]">
                 {source.source_type.toUpperCase()}
               </span>
               {source.file_name && (
-                <span className="text-xs text-gray-400">
+                <span className="text-xs text-[var(--text-muted)]">
                   {source.file_name}
                 </span>
               )}
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-[var(--text-muted)]">
                 {format(parseISO(source.created_at), 'MMM d, yyyy h:mm a')}
               </span>
             </div>
@@ -538,10 +530,10 @@ function SourceCard({
         <div className="flex items-center gap-2">
           <button
             onClick={onToggle}
-            className={`p-2 rounded-lg ${
+            className={`p-2 rounded-lg transition-colors ${
               source.is_included_in_search
-                ? 'bg-green-50 text-green-600 hover:bg-green-100'
-                : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
+                ? 'bg-[var(--success)]/10 text-[var(--success)] hover:bg-[var(--success)]/20'
+                : 'bg-[var(--surface-hover)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)]'
             }`}
             title={source.is_included_in_search ? 'Included in search' : 'Excluded from search'}
           >
@@ -549,7 +541,7 @@ function SourceCard({
           </button>
           <button
             onClick={onDelete}
-            className="p-2 rounded-lg bg-gray-50 text-gray-400 hover:bg-red-50 hover:text-red-600"
+            className="p-2 rounded-lg bg-[var(--surface-hover)] text-[var(--text-muted)] hover:bg-[var(--danger)]/10 hover:text-[var(--danger)] transition-colors"
             title="Delete source"
           >
             <Trash2 className="h-5 w-5" />
@@ -559,13 +551,13 @@ function SourceCard({
 
       {source.status === 'processing' && source.emails_total > 0 && (
         <div className="mt-4">
-          <div className="flex items-center justify-between text-sm text-gray-600 mb-1">
+          <div className="flex items-center justify-between text-sm text-[var(--text-secondary)] mb-1">
             <span>Importing emails...</span>
             <span>{source.emails_processed.toLocaleString()} / {source.emails_total.toLocaleString()}</span>
           </div>
-          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+          <div className="h-2 bg-[var(--surface-hover)] rounded-full overflow-hidden">
             <div
-              className="h-full bg-primary-500 transition-all duration-300"
+              className="h-full bg-[var(--accent)] transition-all duration-300"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -574,16 +566,16 @@ function SourceCard({
 
       {source.status === 'completed' && (
         <div className="mt-4 flex items-center gap-6 text-sm">
-          <span className="text-gray-600">
-            <strong className="text-gray-900">{source.emails_processed.toLocaleString()}</strong> emails
+          <span className="text-[var(--text-secondary)]">
+            <strong className="text-[var(--text-primary)]">{source.emails_processed.toLocaleString()}</strong> emails
           </span>
           {source.emails_failed > 0 && (
-            <span className="text-red-600">
+            <span className="text-[var(--danger)]">
               <strong>{source.emails_failed.toLocaleString()}</strong> failed
             </span>
           )}
           {source.completed_at && (
-            <span className="text-gray-400">
+            <span className="text-[var(--text-muted)]">
               Completed {format(parseISO(source.completed_at), 'MMM d, yyyy')}
             </span>
           )}
@@ -591,9 +583,9 @@ function SourceCard({
       )}
 
       {source.status === 'failed' && source.error_message && (
-        <div className="mt-4 p-3 bg-red-50 rounded-lg flex items-start gap-2">
-          <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-red-700">{source.error_message}</p>
+        <div className="mt-4 p-3 bg-[var(--danger)]/10 rounded-lg flex items-start gap-2">
+          <AlertCircle className="h-5 w-5 text-[var(--danger)] flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-[var(--danger)]">{source.error_message}</p>
         </div>
       )}
     </div>
@@ -657,19 +649,19 @@ function UploadModal({
   const fileExt = selectedFile?.name.split('.').pop()?.toLowerCase();
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-[var(--surface)] rounded-[14px] shadow-xl max-w-lg w-full border border-[var(--border)]">
         <div className="p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Import Email Archive</h2>
+          <h2 className="text-xl font-semibold text-[var(--text-primary)] mb-4">Import Email Archive</h2>
 
           {/* Drop Zone */}
           <div
-            className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+            className={`relative border-2 border-dashed rounded-[14px] p-8 text-center transition-colors ${
               dragActive
-                ? 'border-primary-500 bg-primary-50'
+                ? 'border-[var(--accent)] bg-[var(--accent-dim)]'
                 : selectedFile
-                ? 'border-green-500 bg-green-50'
-                : 'border-gray-300 hover:border-gray-400'
+                ? 'border-[var(--success)] bg-[var(--success)]/5'
+                : 'border-[var(--input-border)] hover:border-[var(--border-hover)]'
             }`}
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
@@ -689,36 +681,36 @@ function UploadModal({
 
             {selectedFile ? (
               <div className="flex items-center justify-center gap-3">
-                <File className={`h-10 w-10 ${fileExt === 'mbox' ? 'text-red-500' : 'text-blue-500'}`} />
+                <File className={`h-10 w-10 ${fileExt === 'mbox' ? 'text-[var(--danger)]' : 'text-[var(--accent)]'}`} />
                 <div className="text-left">
-                  <div className="font-medium text-gray-900">{selectedFile.name}</div>
-                  <div className="text-sm text-gray-500">
+                  <div className="font-medium text-[var(--text-primary)]">{selectedFile.name}</div>
+                  <div className="text-sm text-[var(--text-secondary)]">
                     {(selectedFile.size / 1024 / 1024).toFixed(1)} MB
                     {fileExt === 'pst' && (
-                      <span className="ml-2 text-yellow-600">(CLI required)</span>
+                      <span className="ml-2 text-[var(--warning)]">(CLI required)</span>
                     )}
                   </div>
                 </div>
                 <button
                   onClick={() => setSelectedFile(null)}
-                  className="p-1 hover:bg-white rounded"
+                  className="p-1 hover:bg-[var(--surface-hover)] rounded"
                 >
-                  <X className="h-5 w-5 text-gray-400" />
+                  <X className="h-5 w-5 text-[var(--text-muted)]" />
                 </button>
               </div>
             ) : (
               <>
-                <Upload className={`h-10 w-10 mx-auto mb-3 ${dragActive ? 'text-primary-500' : 'text-gray-400'}`} />
-                <p className="text-gray-600 mb-2">
+                <Upload className={`h-10 w-10 mx-auto mb-3 ${dragActive ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`} />
+                <p className="text-[var(--text-secondary)] mb-2">
                   Drag and drop your email file here, or{' '}
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="text-primary-600 hover:text-primary-700 font-medium"
+                    className="text-[var(--accent)] hover:opacity-80 font-medium"
                   >
                     browse
                   </button>
                 </p>
-                <p className="text-sm text-gray-400">
+                <p className="text-sm text-[var(--text-muted)]">
                   Supports .mbox (Gmail) and .pst (Outlook)
                 </p>
               </>
@@ -729,7 +721,7 @@ function UploadModal({
           {selectedFile && (
             <div className="mt-4 space-y-4">
               <div>
-                <label htmlFor="source-name" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="source-name" className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                   Display Name
                 </label>
                 <input
@@ -739,11 +731,11 @@ function UploadModal({
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g., Work Gmail, Personal"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)]"
                 />
               </div>
               <div>
-                <label htmlFor="source-email" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="source-email" className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                   Email Address (optional)
                 </label>
                 <input
@@ -753,19 +745,19 @@ function UploadModal({
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="e.g., you@example.com"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)]"
                 />
               </div>
 
               {fileExt === 'pst' && (
-                <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                <div className="p-3 bg-[var(--warning)]/10 rounded-lg border border-[var(--warning)]/20">
                   <div className="flex items-start gap-2">
-                    <AlertCircle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-                    <div className="text-sm text-yellow-800">
+                    <AlertCircle className="h-5 w-5 text-[var(--warning)] flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-[var(--warning)]">
                       <p className="font-medium">PST files require CLI processing</p>
-                      <p className="mt-1">After clicking Import, you'll need to run:</p>
-                      <code className="block mt-2 p-2 bg-yellow-100 rounded text-xs">
-                        python3 scripts/ingest_pst.py "{selectedFile.name}"
+                      <p className="mt-1">After clicking Import, you&apos;ll need to run:</p>
+                      <code className="block mt-2 p-2 bg-[var(--warning)]/10 rounded text-xs">
+                        python3 scripts/ingest_pst.py &quot;{selectedFile.name}&quot;
                       </code>
                     </div>
                   </div>
@@ -775,17 +767,17 @@ function UploadModal({
           )}
         </div>
 
-        <div className="px-6 py-4 bg-gray-50 rounded-b-lg flex justify-end gap-3">
+        <div className="px-6 py-4 bg-[var(--surface-hover)] rounded-b-[14px] flex justify-end gap-3">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
+            className="px-4 py-2 text-[var(--text-secondary)] hover:bg-[var(--surface)] rounded-lg transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={handleSubmit}
             disabled={!selectedFile}
-            className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 bg-[var(--accent)] text-white rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
           >
             {fileExt === 'pst' ? 'Create Source' : 'Start Import'}
           </button>

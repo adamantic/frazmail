@@ -51,8 +51,8 @@ export default function SearchPage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Search Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Search Emails</h1>
-        <p className="text-gray-600">
+        <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-2">Search Emails</h1>
+        <p className="text-[var(--text-secondary)]">
           AI-powered hybrid search across your entire email archive
         </p>
       </div>
@@ -61,20 +61,20 @@ export default function SearchPage() {
       <div className="mb-6">
         <div className="flex gap-2">
           <div className="relative flex-1">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-[var(--text-muted)]" />
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Search emails... (e.g., 'pricing discussion with John about the Melbourne project')"
-              className="w-full pl-12 pr-4 py-3 text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full pl-12 pr-4 py-3 text-lg bg-[var(--input-bg)] border border-[var(--input-border)] rounded-[14px] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)]"
             />
           </div>
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`px-4 py-3 border rounded-lg ${
-              showFilters ? 'bg-primary-50 border-primary-500' : 'border-gray-300'
+            className={`px-4 py-3 border rounded-[14px] transition-colors ${
+              showFilters ? 'bg-[var(--accent-dim)] border-[var(--accent)] text-[var(--accent)]' : 'border-[var(--input-border)] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]'
             }`}
           >
             <Filter className="h-5 w-5" />
@@ -82,7 +82,7 @@ export default function SearchPage() {
           <button
             onClick={handleSearch}
             disabled={loading || !query.trim()}
-            className="px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-6 py-3 bg-[var(--accent)] text-white rounded-[14px] hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
           >
             {loading ? 'Searching...' : 'Search'}
           </button>
@@ -90,32 +90,32 @@ export default function SearchPage() {
 
         {/* Filters */}
         {showFilters && (
-          <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <div className="mt-4 p-4 bg-[var(--surface)] rounded-[14px] border border-[var(--border)]">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                   From Date
                 </label>
                 <input
                   type="date"
                   value={filters.date_from || ''}
                   onChange={(e) => setFilters({ ...filters, date_from: e.target.value || undefined })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                   To Date
                 </label>
                 <input
                   type="date"
                   value={filters.date_to || ''}
                   onChange={(e) => setFilters({ ...filters, date_to: e.target.value || undefined })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                   Has Attachments
                 </label>
                 <select
@@ -124,7 +124,7 @@ export default function SearchPage() {
                     ...filters,
                     has_attachments: e.target.value === '' ? undefined : e.target.value === 'true'
                   })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
                 >
                   <option value="">Any</option>
                   <option value="true">Yes</option>
@@ -138,18 +138,18 @@ export default function SearchPage() {
 
       {/* Error */}
       {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+        <div className="mb-6 p-4 bg-[var(--danger)]/10 border border-[var(--danger)]/20 rounded-[14px] text-[var(--danger)]">
           {error}
         </div>
       )}
 
       {/* Results Info */}
       {response && (
-        <div className="mb-4 flex items-center justify-between text-sm text-gray-600">
+        <div className="mb-4 flex items-center justify-between text-sm text-[var(--text-secondary)]">
           <div>
             Found {response.total} results in {response.search_time_ms}ms
             {response.query_expanded.length > 1 && (
-              <span className="ml-2 text-gray-400">
+              <span className="ml-2 text-[var(--text-muted)]">
                 (also searched: {response.query_expanded.slice(1).join(', ')})
               </span>
             )}
@@ -158,31 +158,31 @@ export default function SearchPage() {
       )}
 
       {/* Results - Inbox Style */}
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <div className="divide-y divide-gray-100">
+      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[14px] overflow-hidden">
+        <div className="divide-y divide-[var(--border)]">
           {results.map((result) => (
             <div
               key={result.email_id}
               onClick={() => setSelectedEmail(result.email_id)}
-              className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors"
+              className="flex items-center gap-4 px-4 py-3 hover:bg-[var(--surface-hover)] cursor-pointer transition-colors"
             >
               <div className="w-44 flex-shrink-0">
-                <span className="text-sm font-medium text-gray-900 truncate block">
+                <span className="text-sm font-medium text-[var(--text-primary)] truncate block">
                   {result.from_name || result.from_email.split('@')[0]}
                 </span>
               </div>
               <div className="flex-1 min-w-0 flex items-center gap-2">
-                <span className="font-medium text-gray-900 truncate">
+                <span className="font-medium text-[var(--text-primary)] truncate">
                   {result.subject || '(No subject)'}
                 </span>
-                <span className="text-gray-400">-</span>
+                <span className="text-[var(--text-muted)]">-</span>
                 <span
-                  className="text-gray-500 truncate text-sm"
+                  className="text-[var(--text-secondary)] truncate text-sm"
                   dangerouslySetInnerHTML={{ __html: sanitizeHTML(result.snippet) }}
                 />
               </div>
               <div className="w-24 flex-shrink-0 text-right">
-                <span className="text-sm text-gray-500">
+                <span className="text-sm text-[var(--text-secondary)]">
                   {format(parseISO(result.sent_at), 'MMM d')}
                 </span>
               </div>
@@ -194,22 +194,22 @@ export default function SearchPage() {
       {/* Empty State */}
       {!loading && query && results.length === 0 && !error && (
         <div className="text-center py-12">
-          <Mail className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No results found</h3>
-          <p className="text-gray-600">Try different keywords or broaden your search</p>
+          <Mail className="h-12 w-12 text-[var(--text-muted)] mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-[var(--text-primary)] mb-2">No results found</h3>
+          <p className="text-[var(--text-secondary)]">Try different keywords or broaden your search</p>
         </div>
       )}
 
       {/* Initial State */}
       {!loading && !query && results.length === 0 && (
         <div className="text-center py-12">
-          <Search className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Search your emails</h3>
-          <p className="text-gray-600 max-w-md mx-auto">
+          <Search className="h-12 w-12 text-[var(--text-muted)] mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-[var(--text-primary)] mb-2">Search your emails</h3>
+          <p className="text-[var(--text-secondary)] max-w-md mx-auto">
             Use natural language to find emails. The hybrid search combines keyword matching
             with semantic understanding to find what you're looking for.
           </p>
-          <div className="mt-6 space-y-2 text-sm text-gray-500">
+          <div className="mt-6 space-y-2 text-sm text-[var(--text-secondary)]">
             <p>Try searching for:</p>
             <div className="flex flex-wrap justify-center gap-2">
               {[
@@ -221,9 +221,9 @@ export default function SearchPage() {
                 <button
                   key={example}
                   onClick={() => setQuery(example)}
-                  className="px-3 py-1 bg-gray-100 rounded-full hover:bg-gray-200"
+                  className="px-3 py-1 bg-[var(--accent-dim)] text-[var(--accent)] rounded-full hover:bg-[var(--accent-glow)] transition-colors"
                 >
-                  "{example}"
+                  &ldquo;{example}&rdquo;
                 </button>
               ))}
             </div>
@@ -257,30 +257,30 @@ function EmailModal({ emailId, onClose }: { emailId: string; onClose: () => void
   }, [emailId]);
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-        <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-lg font-semibold">Email Details</h2>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
-            <X className="h-5 w-5" />
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-[var(--surface)] rounded-[14px] shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden border border-[var(--border)]">
+        <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
+          <h2 className="text-lg font-semibold text-[var(--text-primary)]">Email Details</h2>
+          <button onClick={onClose} className="p-1 hover:bg-[var(--surface-hover)] rounded">
+            <X className="h-5 w-5 text-[var(--text-secondary)]" />
           </button>
         </div>
 
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
           {loading ? (
-            <div className="text-center py-8 text-gray-500">Loading...</div>
+            <div className="text-center py-8 text-[var(--text-secondary)]">Loading...</div>
           ) : email ? (
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-4">{email.subject}</h1>
+              <h1 className="text-2xl font-bold text-[var(--text-primary)] mb-4">{email.subject}</h1>
 
               <div className="mb-6 space-y-2 text-sm">
                 <div className="flex">
-                  <span className="w-20 text-gray-500">From:</span>
-                  <span>{email.from_name} &lt;{email.from_email}&gt;</span>
+                  <span className="w-20 text-[var(--text-secondary)]">From:</span>
+                  <span className="text-[var(--text-primary)]">{email.from_name} &lt;{email.from_email}&gt;</span>
                 </div>
                 <div className="flex">
-                  <span className="w-20 text-gray-500">To:</span>
-                  <span>
+                  <span className="w-20 text-[var(--text-secondary)]">To:</span>
+                  <span className="text-[var(--text-primary)]">
                     {email.recipients
                       .filter((r: any) => r.recipient_type === 'to')
                       .map((r: any) => r.name || r.email)
@@ -288,20 +288,20 @@ function EmailModal({ emailId, onClose }: { emailId: string; onClose: () => void
                   </span>
                 </div>
                 <div className="flex">
-                  <span className="w-20 text-gray-500">Date:</span>
-                  <span>{format(parseISO(email.sent_at), 'PPpp')}</span>
+                  <span className="w-20 text-[var(--text-secondary)]">Date:</span>
+                  <span className="text-[var(--text-primary)]">{format(parseISO(email.sent_at), 'PPpp')}</span>
                 </div>
               </div>
 
               {email.attachments?.length > 0 && (
                 <div className="mb-6">
-                  <h3 className="text-sm font-medium text-gray-700 mb-2">Attachments</h3>
+                  <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-2">Attachments</h3>
                   <div className="flex flex-wrap gap-2">
                     {email.attachments.map((att: any) => (
                       <a
                         key={att.id}
                         href={`/api/emails/${emailId}/attachments/${att.id}`}
-                        className="px-3 py-1 bg-gray-100 rounded text-sm hover:bg-gray-200"
+                        className="px-3 py-1 bg-[var(--accent-dim)] text-[var(--accent)] rounded text-sm hover:bg-[var(--accent-glow)] transition-colors"
                       >
                         {att.filename} ({(att.size / 1024).toFixed(1)} KB)
                       </a>
@@ -310,7 +310,7 @@ function EmailModal({ emailId, onClose }: { emailId: string; onClose: () => void
                 </div>
               )}
 
-              <div className="border-t pt-4">
+              <div className="border-t border-[var(--border)] pt-4">
                 <div
                   className="email-body prose max-w-none"
                   dangerouslySetInnerHTML={{
@@ -320,7 +320,7 @@ function EmailModal({ emailId, onClose }: { emailId: string; onClose: () => void
               </div>
             </div>
           ) : (
-            <div className="text-center py-8 text-gray-500">Email not found</div>
+            <div className="text-center py-8 text-[var(--text-secondary)]">Email not found</div>
           )}
         </div>
       </div>
