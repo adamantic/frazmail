@@ -21,8 +21,7 @@ export function Navigation() {
 
   useEffect(() => {
     const stored = localStorage.getItem('theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const shouldBeDark = stored === 'dark' || (!stored && prefersDark) || (!stored && !prefersDark && true);
+    const shouldBeDark = stored ? stored === 'dark' : true; // default dark
     setIsDark(shouldBeDark);
     document.documentElement.setAttribute('data-theme', shouldBeDark ? 'dark' : 'light');
   }, []);

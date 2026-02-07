@@ -934,8 +934,12 @@ app.post('/api/sources/:id/process', async (c) => {
     return c.json({ error: 'Source not found' }, 404);
   }
 
-  const body = await c.req.json<{ totalChunks: number }>();
-  const totalChunks = body.totalChunks || 1;
+  const body = await c.req.json<{ totalChunks?: number }>();
+  const totalChunks = body.totalChunks ?? 1;
+
+  if (typeof totalChunks !== 'number' || !Number.isFinite(totalChunks) || !Number.isInteger(totalChunks) || totalChunks <= 0) {
+    return c.json({ error: 'Invalid totalChunks' }, 400);
+  }
 
   console.log(`[Process] Enqueuing chunk 0/${totalChunks} for source ${sourceId} (chunks processed sequentially via chaining)`);
 
@@ -1163,10 +1167,8 @@ async function processChunk(
     'UPDATE email_sources SET emails_total = emails_total + ? WHERE id = ? AND user_id = ?'
   ).bind(emailCount, sourceId, userId).run();
 
-  // Clean up: delete chunk from R2
-  await env.ATTACHMENTS.delete(r2Key);
-
-  // Chain: enqueue the next chunk, or finalize on the last chunk
+  // Chain: enqueue the next chunk BEFORE deleting the current one from R2,
+  // so that if sendBatch fails the retry can still read this chunk.
   if (isLastChunk) {
     await env.CACHE.delete(carryoverKey);
 
@@ -1194,6 +1196,9 @@ async function processChunk(
       },
     }]);
   }
+
+  // Clean up: delete chunk from R2 only after next chunk is enqueued
+  await env.ATTACHMENTS.delete(r2Key);
 
   console.log(`[ProcessChunk] Chunk ${chunkIndex + 1}/${totalChunks} for source ${sourceId}: found ${matches.length} boundaries, enqueued ${emailCount} emails`);
 }
